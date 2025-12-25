@@ -1,0 +1,41 @@
+name: Daily Stock Price Update
+
+# Runs periodically or manually
+on:
+  schedule:
+    # Run at 00:00 UTC every day (Approx 08:00 AM Taiwan/China time)
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+jobs:
+  update-prices:
+    runs-on: ubuntu-latest
+    
+    # Needs permissions to write logs if you add that later
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas sqlalchemy psycopg2-binary yfinance tqdm python-dotenv
+
+      - name: Run Daily Update
+        env:
+          # Secrets are stored in GitHub Repo Settings
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_PORT: 5432 # Usually 5432, or 6543 for Supabase Pooling
+        run: |
+          python daily_update.py
