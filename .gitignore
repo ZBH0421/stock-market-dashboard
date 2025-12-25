@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+venv/
+ENV/
+
+# Database / CSV / Temp
+*.csv
+*.xlsx
+*.log
+queries.sql
+schema.sql
+
+# Local IDE
+.vscode/
+.idea/
+
+# Images / Reports (Optional - keep templates, ignore generated artifacts)
+# Airlines_MarketCap_Pie.png
+Airlines_Report[2-9].html
+temp_report.html
+new_script.html
+diagnose_*.py
+check_*.py
+test_*.py
+repair_*.py
+view_data.py
+run_*.py
+batch_*.py
+main.py
+plot_*.py
+generate_*.py
+index.html
+dynamic_report.html
+report.html
+PLOT/
+style_showcase/
+msft_test.csv
