@@ -41,6 +41,8 @@ def get_industries():
 
 @app.get("/api/industry/{industry_name}")
 def get_industry_data(industry_name: str):
+    from urllib.parse import unquote
+    industry_name = unquote(industry_name)
     try:
         with db.engine.connect() as conn:
             # 1. Get Industry ID (Try exact match first, then case-insensitive)

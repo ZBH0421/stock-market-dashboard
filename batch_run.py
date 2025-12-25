@@ -51,11 +51,22 @@ class BatchController:
             print(f"------------------------------------------------")
             
             try:
-                # 1. Register Industry
-                industry_id = self.db.get_or_create_industry(sheet_name)
-                
                 # Read specific sheet
                 df_sheet = pd.read_excel(xls, sheet_name=sheet_name)
+                
+                # 1. Determine Correct Industry Name
+                # Prefer the 'Industry' column if it exists (usually has correct spelling)
+                # Fallback to sheet_name if column missing
+                final_industry_name = sheet_name
+                if 'Industry' in df_sheet.columns and not df_sheet['Industry'].dropna().empty:
+                    candidate_name = df_sheet['Industry'].dropna().iloc[0]
+                    if isinstance(candidate_name, str) and len(candidate_name) > 3:
+                        final_industry_name = candidate_name.strip()
+                        
+                print(f"   -> Registering as: '{final_industry_name}'")
+
+                # 2. Register Industry (with potentially corrected name)
+                industry_id = self.db.get_or_create_industry(final_industry_name)
                 
                 # Check for 'Ticker' column
                 if 'Ticker' not in df_sheet.columns:
