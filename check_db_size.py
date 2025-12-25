@@ -1,40 +1,30 @@
 from market_data_db import MarketDataDB
 from sqlalchemy import text
-import pandas as pd
 
-def check_db_size():
-    print("Calculating Database Size...")
-    try:
-        db = MarketDataDB()
-        with db.engine.connect() as conn:
-            # 1. Total Database Size
-            query_total = text("SELECT pg_size_pretty(pg_database_size(current_database())) as total_size;")
-            total_size = conn.execute(query_total).scalar()
-            
-            # 2. Daily Prices Table Size (Data + Indexes)
-            query_table = text("SELECT pg_size_pretty(pg_total_relation_size('us_daily_prices')) as table_size;")
-            table_size = conn.execute(query_table).scalar()
-            
-            # 3. Row Count
-            query_count = text("SELECT COUNT(*) FROM us_daily_prices;")
-            row_count = conn.execute(query_count).scalar()
-            
-            print(f"\n[Database Statistics]")
-            print(f"Total DB Name: {os.getenv('DB_NAME', 'postgres')}")
-            print(f"Total DB Size: {total_size}")
-            print(f"Prices Table Size: {table_size}")
-            print(f"Total Rows (Prices): {row_count:,}")
-            
-            # Estimate per row
-            if row_count > 0:
-                # Get raw size in bytes for calculation
-                size_bytes = conn.execute(text("SELECT pg_total_relation_size('us_daily_prices')")).scalar()
-                avg_row_size = size_bytes / row_count
-                print(f"Avg Size per Row: {avg_row_size:.2f} bytes")
+def check_size():
+    db = MarketDataDB()
+    with db.engine.connect() as conn:
+        # 1. Total DB Size
+        total_size = conn.execute(text("SELECT pg_size_pretty(pg_database_size(current_database()))")).scalar()
+        
+        # 2. Table Sizes
+        print(f"Total Database Size: {total_size}")
+        print("-" * 30)
+        print(f"{'Table':<20} | {'Size':<10}")
+        print("-" * 30)
+        
+        tables = ['industries', 'tickers', 'us_daily_prices']
+        for t in tables:
+            size = conn.execute(text(f"SELECT pg_size_pretty(pg_total_relation_size('{t}'))")).scalar()
+            print(f"{t:<20} | {size:<10}")
 
-    except Exception as e:
-        print(f"Error checking size: {e}")
+        # 3. Row Counts
+        print("-" * 30)
+        print(f"{'Table':<20} | {'Rows':<10}")
+        print("-" * 30)
+        for t in tables:
+            count = conn.execute(text(f"SELECT count(*) FROM {t}")).scalar()
+            print(f"{t:<20} | {count:<10}")
 
-import os
 if __name__ == "__main__":
-    check_db_size()
+    check_size()
