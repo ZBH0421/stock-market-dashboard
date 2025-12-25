@@ -168,8 +168,10 @@
                 <h1 class="page-title" id="industryTitle">Market Report</h1>
                 <p class="page-subtitle">Interactive market analysis dashboard & visualization</p>
             </div>
-            <div class="col-md-6 text-md-end d-flex justify-content-end align-items-center gap-2">
-                <a href="home.html" class="btn btn-outline-primary btn-sm d-flex align-items-center gap-1">
+            <div
+                class="col-md-6 text-md-end d-flex justify-content-end align-items-center gap-2 flex-wrap mt-3 mt-md-0">
+                <a href="home.html" id="homeLink"
+                    class="btn btn-outline-primary btn-sm d-flex align-items-center gap-1">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor"
                         viewBox="0 0 16 16">
                         <path
@@ -418,6 +420,12 @@
 
             // Initial Load
             loadData(currentIndustry);
+
+            // 0. Smart Home Link Logic
+            // If user came from home_phone.html OR is on a small screen, make Home button go to home_phone.html
+            if (document.referrer.includes('home_phone.html') || window.innerWidth <= 768) {
+                $('#homeLink').attr('href', 'home_phone.html');
+            }
 
             // Industry Selector Change
             $('#industrySelector').on('change', function () {
