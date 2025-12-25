@@ -169,12 +169,16 @@
                 <p class="page-subtitle">Interactive market analysis dashboard & visualization</p>
             </div>
             <div class="col-md-6 text-md-end d-flex justify-content-end align-items-center gap-2">
+                <a href="home.html" class="btn btn-outline-primary btn-sm d-flex align-items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor"
+                        viewBox="0 0 16 16">
+                        <path
+                            d="M8.707 1.5a1 1 0 0 0-1.414 0L.646 8.146a.5.5 0 0 0 .708.708L2 8.207V13.5A1.5 1.5 0 0 0 3.5 15h9a1.5 1.5 0 0 0 1.5-1.5V8.207l.646.647a.5.5 0 0 0 .708-.708L13 5.793V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.293L8.707 1.5Z" />
+                    </svg>
+                    Home
+                </a>
                 <select id="industrySelector" class="form-select w-auto">
-                    <option value="Airlines">Airlines</option>
-                    <option value="Semiconductors">Semiconductors</option>
-                    <option value="Software">Software</option>
-                    <option value="Banks">Banks</option>
-                    <option value="Biotech">Biotech</option>
+                    <!-- Dynamic Options -->
                 </select>
                 <button class="btn btn-outline-secondary btn-sm" onclick="window.print()">Export PDF</button>
             </div>
@@ -398,7 +402,19 @@
             new ApexCharts(document.querySelector("#marketCapChart"), options).render();
         }
 
-        $(document).ready(function () {
+        $(document).ready(async function () {
+            // Populate Industry Selector
+            try {
+                const res = await fetch('http://127.0.0.1:8000/api/industries');
+                const data = await res.json();
+                const selector = $('#industrySelector');
+                selector.empty();
+                data.industries.forEach(ind => {
+                    selector.append(`<option value="${ind}">${ind}</option>`);
+                });
+                selector.val(currentIndustry);
+            } catch (e) { console.error("Failed to load industry list", e); }
+
             // Initial Load
             loadData(currentIndustry);
 

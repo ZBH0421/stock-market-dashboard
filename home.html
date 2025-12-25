@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Market Intelligence Home</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-body: #0f172a;
+            --text-main: #f8fafc;
+            --accent: #3b82f6;
+            --card-bg: rgba(30, 41, 59, 0.7);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-body);
+            background-image: radial-gradient(circle at 50% 0%, #1e293b 0%, #0f172a 100%);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .home-container {
+            max-width: 1000px;
+            width: 90%;
+            padding: 4rem 0;
+            text-align: center;
+        }
+
+        h1 {
+            font-weight: 800;
+            font-size: 3.5rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(to right, #fff, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            color: #94a3b8;
+            font-size: 1.25rem;
+            margin-bottom: 4rem;
+        }
+
+        .industry-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .industry-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 2.5rem 2rem;
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .industry-card:hover {
+            transform: translateY(-10px);
+            background: rgba(30, 41, 59, 0.9);
+            border-color: var(--accent);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        .industry-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at top right, rgba(59, 130, 246, 0.1), transparent);
+            pointer-events: none;
+        }
+
+        .icon-box {
+            width: 60px;
+            height: 60px;
+            background: rgba(59, 130, 246, 0.1);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+            color: var(--accent);
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .industry-name {
+            font-weight: 700;
+            font-size: 1.25rem;
+            letter-spacing: -0.01em;
+        }
+
+        .loading-spinner {
+            display: none;
+            margin: 2rem auto;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="home-container">
+        <h1>Market Intelligence</h1>
+        <p class="subtitle">Select an industry to explore dynamic insights and performance metrics.</p>
+
+        <div id="loading" class="spinner-border text-primary loading-spinner" role="status"></div>
+
+        <div class="industry-grid" id="industryGrid">
+            <!-- Dynamic Cards -->
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script>
+        async function fetchIndustries() {
+            $('#loading').show();
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/industries');
+                const data = await response.json();
+
+                const grid = $('#industryGrid');
+                grid.empty();
+
+                data.industries.forEach(ind => {
+                    const firstChar = ind.charAt(0);
+                    const card = `
+                        <a href="index.html?industry=${ind}" class="industry-card">
+                            <div class="icon-box">${firstChar}</div>
+                            <div class="industry-name">${ind}</div>
+                        </a>
+                    `;
+                    grid.append(card);
+                });
+            } catch (err) {
+                console.error("Failed to fetch industries:", err);
+                $('#industryGrid').html('<p class="text-danger">Unable to load industries. Ensure the API server is running.</p>');
+            } finally {
+                $('#loading').hide();
+            }
+        }
+
+        $(document).ready(fetchIndustries);
+    </script>
+</body>
+
+</html>

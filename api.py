@@ -29,6 +29,16 @@ db = MarketDataDB()
 def read_root():
     return {"status": "ok", "message": "Market Data API is running"}
 
+@app.get("/api/industries")
+def get_industries():
+    try:
+        with db.engine.connect() as conn:
+            query = text("SELECT DISTINCT name FROM industries ORDER BY name")
+            res = conn.execute(query).fetchall()
+            return {"industries": [r[0] for r in res]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/industry/{industry_name}")
 def get_industry_data(industry_name: str):
     try:
