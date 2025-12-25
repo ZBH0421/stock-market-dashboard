@@ -19,7 +19,7 @@ class BatchController:
         except Exception as e:
             raise RuntimeError(f"Failed to initialize components: {e}")
 
-    def run(self, start_date: str, end_date: str, target_industry: str = None):
+    def run(self, start_date: str, end_date: str, target_industry: str = None, missing_only: bool = False):
         """
         Main execution loop.
         Iterates through all sheets in the Excel file, fetches data for each ticker,
@@ -27,6 +27,7 @@ class BatchController:
         
         Args:
             target_industry (str): If provided, only process this specific industry (Sheet).
+            missing_only (bool): If True, skip industries that already exist in the DB.
         """
         print(f"Reading Excel file: {self.excel_path}...")
         
@@ -35,6 +36,16 @@ class BatchController:
             xls = pd.ExcelFile(self.excel_path)
             sheet_names = xls.sheet_names
             print(f"Found {len(sheet_names)} sheets (Industries).")
+
+            # Pre-fetch existing industries if in missing_only mode
+            existing_industries = set()
+            if missing_only:
+                with self.db.engine.connect() as conn:
+                    # Generic SQL for compatibility
+                    from sqlalchemy import text
+                    rows = conn.execute(text("SELECT name FROM industries")).fetchall()
+                    existing_industries = set(r[0] for r in rows)
+                print(f"Mode: Missing Only. Found {len(existing_industries)} existing industries in DB.")
             
         except Exception as e:
             print(f"Critical Error: Could not read Excel file. {e}")
@@ -48,23 +59,41 @@ class BatchController:
             
             print(f"\n------------------------------------------------")
             print(f"Processing Industry: {sheet_name}")
+            
+            # --- Name Resolution (Peeking) ---
+            # We need to know the 'Real Name' to check if it's missing.
+            # Read just a few rows to get the Industry column.
+            try:
+                df_peek = pd.read_excel(xls, sheet_name=sheet_name, nrows=5)
+            except Exception as e:
+                print(f"Error peeking sheet '{sheet_name}': {e}")
+                continue
+
+            # Determine Correct Industry Name
+            final_industry_name = sheet_name
+            if 'Industry' in df_peek.columns and not df_peek['Industry'].dropna().empty:
+                candidate_name = df_peek['Industry'].dropna().iloc[0]
+                if isinstance(candidate_name, str) and len(candidate_name) > 3:
+                    final_industry_name = candidate_name.strip()
+            
+            print(f"   -> Identified as: '{final_industry_name}'")
+
+            # --- Missing Only Check ---
+            if missing_only and final_industry_name in existing_industries:
+                print(f"   -> [SKIP] Already exists in DB.")
+                continue
+
             print(f"------------------------------------------------")
             
             try:
-                # Read specific sheet
+                # Read FULL sheet now
                 df_sheet = pd.read_excel(xls, sheet_name=sheet_name)
                 
-                # 1. Determine Correct Industry Name
-                # Prefer the 'Industry' column if it exists (usually has correct spelling)
-                # Fallback to sheet_name if column missing
-                final_industry_name = sheet_name
-                if 'Industry' in df_sheet.columns and not df_sheet['Industry'].dropna().empty:
-                    candidate_name = df_sheet['Industry'].dropna().iloc[0]
-                    if isinstance(candidate_name, str) and len(candidate_name) > 3:
-                        final_industry_name = candidate_name.strip()
-                        
-                print(f"   -> Registering as: '{final_industry_name}'")
-
+                # Check for 'Ticker' column
+                if 'Ticker' not in df_sheet.columns:
+                    print(f"Warning: Sheet '{sheet_name}' missing 'Ticker' column (Skipping).")
+                    continue
+                
                 # 2. Register Industry (with potentially corrected name)
                 industry_id = self.db.get_or_create_industry(final_industry_name)
                 
