@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Market Report</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- DataTables -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap5.min.css">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            color: #1f2937;
+        }
+
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            margin-bottom: 24px;
+        }
+
+        .card-header {
+            background-color: #fff;
+            border-bottom: 1px solid #e5e7eb;
+            border-radius: 12px 12px 0 0 !important;
+            padding: 1.25rem 1.5rem;
+            font-weight: 600;
+            color: #111827;
+        }
+
+        .symbol-badge {
+            background-color: #eff6ff;
+            color: #1d4ed8;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.9em;
+        }
+
+        .badge-pct {
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 6px;
+        }
+
+        .pct-pos {
+            background-color: #dcfce7;
+            color: #166534;
+        }
+
+        .pct-neg {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+
+        /* Tooltip & Chart */
+        #chartTooltip {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            padding: 16px;
+            width: 320px;
+            backdrop-filter: blur(8px);
+        }
+
+        #loadingOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Loading Spinner -->
+    <div id="loadingOverlay">
+        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+
+    <div class="container-fluid py-4 px-4" style="max-width: 1600px;">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="fw-bold text-dark mb-1 ml-2" id="industryTitle">Loading...</h2>
+                <div class="text-secondary" id="industrySubtitle">Real-time Data Feed</div>
+            </div>
+            <div>
+                <button class="btn btn-outline-secondary me-2" onclick="location.reload()">Refresh Data</button>
+            </div>
+        </div>
+
+        <!-- Top Widgets -->
+        <div class="row mb-4">
+            <!-- Market Cap Donut -->
+            <div class="col-lg-4">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        Market Cap Distribution
+                    </div>
+                    <div class="card-body d-flex align-items-center justify-content-center">
+                        <div id="marketCapChart" class="w-100"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summary Stats -->
+            <div class="col-lg-8">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span>Market Performance</span>
+                            <div class="d-flex gap-2">
+                                <select id="tfSelector" class="form-select form-select-sm" style="width: auto;">
+                                    <option value="YTD">Year To Date</option>
+                                    <option value="1D">1 Day</option>
+                                    <option value="1M" selected>1 Month</option>
+                                    <option value="12M">1 Year</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table id="stocksTable" class="table table-hover align-middle mb-0" style="width:100%">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Symbol</th>
+                                        <th>Company</th>
+                                        <th>Market Cap</th>
+                                        <th>P/E</th>
+                                        <th>Change</th>
+                                        <th>Volume</th>
+                                        <th>Revenue</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tableBody">
+                                    <!-- Rows injected by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Tooltip Container -->
+    <div id="chartTooltip">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+            <h6 class="fw-bold mb-0" id="tooltipSymbol"></h6>
+            <span id="tooltipValue" class="fw-bold"></span>
+        </div>
+        <div id="sparklineChart" style="min-height: 120px;"></div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const industryParam = urlParams.get('industry') || 'Airlines';
+        // Handle spaces or special chars if necessary, though URLSearchParams usually handles decoding
+        const API_URL = `http://127.0.0.1:8000/api/industry/${industryParam}`;
+        let stockData = {}; // Store historical data for tooltips
+
+        async function fetchData() {
+            try {
+                const response = await fetch(API_URL);
+                const data = await response.json();
+                renderPage(data);
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                alert('Connection Failed: Make sure api_server.py is running!');
+            } finally {
+                $('#loadingOverlay').fadeOut();
+            }
+        }
+
+        function renderPage(data) {
+            // 1. Header
+            $('#industryTitle').text(data.industry + ' Industry');
+            $('#industrySubtitle').text(`${data.ticker_count} Companies • ${fmtMoney(data.total_market_cap)} Total Cap`);
+
+            // 2. Donut Chart
+            renderDonut(data.donut_data);
+
+            // 3. Table Data
+            const rows = data.stocks.map(stock => {
+                // Store history for tooltip
+                stockData[stock.symbol] = stock.history;
+
+                const changeVal = stock.change_1m !== null ? stock.change_1m : 0;
+                const changeClass = changeVal >= 0 ? 'pct-pos' : 'pct-neg';
+                const changeSign = changeVal >= 0 ? '+' : '';
+
+                return `
+                    <tr>
+                        <td><span class="symbol-badge">${stock.symbol}</span></td>
+                        <td class="fw-bold text-dark">${stock.company}</td>
+                        <td data-order="${stock.market_cap}">${fmtMoney(stock.market_cap)}</td>
+                        <td>${stock.pe_ratio ? stock.pe_ratio.toFixed(2) : '-'}</td>
+                        <td class="chart-trigger ${changeClass}" data-symbol="${stock.symbol}" data-tf="1M" style="cursor:pointer;">
+                            ${changeSign}${changeVal.toFixed(2)}%
+                        </td>
+                        <td>${stock.volume ? (stock.volume / 1e6).toFixed(1) + 'M' : '-'}</td>
+                        <td>${stock.revenue ? (stock.revenue / 1e9).toFixed(1) + 'B' : '-'}</td>
+                    </tr>
+                `;
+            });
+
+            $('#tableBody').html(rows.join(''));
+
+            // Init DataTable
+            $('#stocksTable').DataTable({
+                paging: false,
+                info: false,
+                searching: true,
+                order: [[2, 'desc']] // Order by Market Cap
+            });
+        }
+
+        function renderDonut(donutData) {
+            var options = {
+                series: donutData.series,
+                labels: donutData.labels,
+                chart: { type: 'donut', height: 320, fontFamily: 'Inter' },
+                colors: ['#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#2563eb', '#cbd5e1'],
+                plotOptions: {
+                    pie: {
+                        donut: {
+                            size: '70%',
+                            labels: {
+                                show: true,
+                                name: { show: true },
+                                value: {
+                                    show: true,
+                                    formatter: function (val, opts) {
+                                        var total = opts.globals.seriesTotals.reduce((a, b) => a + b, 0);
+                                        return ((val / total) * 100).toFixed(1) + "%";
+                                    }
+                                },
+                                total: {
+                                    show: true,
+                                    label: 'Total Cap',
+                                    formatter: w => fmtMoney(w.globals.seriesTotals.reduce((a, b) => a + b, 0))
+                                }
+                            }
+                        }
+                    }
+                },
+                dataLabels: { enabled: false },
+                legend: { position: 'bottom' },
+                tooltip: { y: { formatter: val => fmtMoney(val) } }
+            };
+            new ApexCharts(document.querySelector("#marketCapChart"), options).render();
+        }
+
+        // --- Helpers ---
+        function fmtMoney(val) {
+            if (!val) return '-';
+            if (val >= 1e9) return "$" + (val / 1e9).toFixed(1) + "B";
+            if (val >= 1e6) return "$" + (val / 1e6).toFixed(1) + "M";
+            return "$" + val.toLocaleString();
+        }
+
+        // --- Hover Chart Logic (Reused) ---
+        $(document).on('mouseenter', '.chart-trigger', function (e) {
+            const symbol = $(this).data('symbol');
+            const history = stockData[symbol];
+            if (!history || history.length === 0) return;
+
+            // Simplified: Just show last 30 days for now
+            const sliced = history.slice(-30);
+            const startP = sliced[0].y;
+            const endP = sliced[sliced.length - 1].y;
+
+            $('#tooltipSymbol').html(`${symbol} <small class="text-muted fw-normal">(Last 30 Days)</small>`);
+            $('#tooltipValue').html(
+                `<div class="text-end text-muted small">$${startP.toFixed(2)} &#8594; $${endP.toFixed(2)}</div>`
+            );
+
+            // Render Tiny Chart
+            if (window.miniChart) window.miniChart.destroy();
+            window.miniChart = new ApexCharts(document.querySelector("#sparklineChart"), {
+                series: [{ data: sliced }],
+                chart: { type: 'area', height: 100, sparkline: { enabled: true } },
+                stroke: { curve: 'smooth', width: 2 },
+                fill: { type: 'gradient', gradient: { opacityFrom: 0.5, opacityTo: 0 } },
+                colors: [endP >= startP ? '#166534' : '#991b1b'],
+                tooltip: { fixed: { enabled: false }, x: { show: true }, y: { title: { formatter: () => '' } } }
+            });
+            window.miniChart.render();
+
+            $('#chartTooltip').fadeIn(100).css({ top: e.clientY + 20, left: e.clientX + 20 });
+        }).on('mouseleave', '.chart-trigger', function () {
+            $('#chartTooltip').hide();
+        });
+
+        // Fetch on Load
+        $(document).ready(fetchData);
+
+    </script>
+</body>
+
+</html>

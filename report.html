@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Market Analysis Report</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- DataTables -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap5.min.css">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+        }
+
+        /* Card Styling */
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            background: white;
+            margin-bottom: 24px;
+            transition: transform 0.2s;
+        }
+
+        .symbol-badge {
+            background-color: #eff6ff;
+            color: #1d4ed8;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.9em;
+        }
+
+        /* Percent Badges */
+        .pct-badge {
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 6px;
+            min-width: 60px;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .pct-pos {
+            background-color: #dcfce7;
+            color: #15803d;
+        }
+
+        /* Green */
+        .pct-neg {
+            background-color: #fee2e2;
+            color: #b91c1c;
+        }
+
+        /* Red */
+        .pct-neu {
+            background-color: #f1f5f9;
+            color: #64748b;
+        }
+
+        /* Grey */
+
+        /* Floating Tooltip */
+        #chartTooltip {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.98);
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            padding: 16px;
+            width: 320px;
+        }
+
+        #loadingOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Loading Spinner -->
+    <div id="loadingOverlay">
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
+            <div class="mt-3 text-secondary fw-semibold">Fetching Market Data...</div>
+        </div>
+    </div>
+
+    <div class="container-fluid py-4 px-4" style="max-width: 1600px;">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="fw-bold text-dark mb-1 ml-2" id="industryTitle">Loading...</h2>
+                <div class="text-secondary" id="industrySubtitle">Connecting to API...</div>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="index.html" class="btn btn-outline-secondary">Back to Dashboard</a>
+                <button class="btn btn-primary" onclick="fetchData()">Refresh Data</button>
+            </div>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="row mb-4">
+            <!-- Left: Donut Chart -->
+            <div class="col-lg-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title fw-bold mb-4">Market Cap Distribution</h5>
+                        <div id="marketCapChart" class="w-100 d-flex justify-content-center"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Stock Table -->
+            <div class="col-lg-8">
+                <div class="card h-100">
+                    <div class="card-body p-0">
+                        <!-- Toolbar -->
+                        <div
+                            class="p-3 border-bottom d-flex justify-content-between align-items-center bg-white rounded-top">
+                            <h5 class="mb-0 fw-bold">Constituents Performance</h5>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="text-secondary small fw-bold">Timeframe:</span>
+                                <select id="tfSelector" class="form-select form-select-sm"
+                                    style="width: 120px; font-weight: 500;">
+                                    <option value="change_1d">1 Day</option>
+                                    <option value="change_1m" selected>1 Month</option>
+                                    <option value="change_ytd">Year To Date</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Table -->
+                        <div class="table-responsive">
+                            <table id="stocksTable" class="table table-hover align-middle mb-0 w-100">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Symbol</th>
+                                        <th>Company</th>
+                                        <th class="text-end">Market Cap</th>
+                                        <th class="text-end">P/E</th>
+                                        <th class="text-center">Change</th>
+                                        <th class="text-end">Volume</th>
+                                        <th class="text-end">Revenue</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Tooltip for Sparklines -->
+    <div id="chartTooltip">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+                <h6 class="fw-bold mb-0 text-dark" id="tooltipSymbol">AAPL</h6>
+                <small class="text-muted">Price Action</small>
+            </div>
+            <span id="tooltipValue" class="fw-bold fs-5"></span>
+        </div>
+        <div id="sparklineChart" style="min-height: 100px;"></div>
+    </div>
+
+    <!-- JS Libraries -->
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+    <script>
+        // CONFIG
+        const URL_PARAMS = new URLSearchParams(window.location.search);
+        const INDUSTRY = URL_PARAMS.get('industry') || 'Airlines';
+        const API_URL = `http://127.0.0.1:8000/api/industry/${INDUSTRY}`;
+
+        // GLOBAL STATE
+        let GLOBAL_DATA = null;
+        let TABLE_INSTANCE = null;
+        let SPARKLINE_INSTANCE = null;
+
+        // 1. FETCH DATA
+        async function fetchData() {
+            $('#loadingOverlay').fadeIn(200);
+            try {
+                console.log(`Fetching: ${API_URL}`);
+                const response = await fetch(API_URL);
+                if (!response.ok) throw new Error('Network response was not ok');
+
+                GLOBAL_DATA = await response.json();
+
+                renderWholePage();
+            } catch (error) {
+                console.error('Fetch Error:', error);
+                alert('Connection to Backend Failed!\n\nPlease ensure:\n1. api.py is running (python -m uvicorn api:app --reload)\n2. Port 8000 is open');
+            } finally {
+                $('#loadingOverlay').fadeOut(300);
+            }
+        }
+
+        // 2. RENDER PAGE
+        function renderWholePage() {
+            if (!GLOBAL_DATA) return;
+
+            // Header
+            $('#industryTitle').text(GLOBAL_DATA.industry);
+            $('#industrySubtitle').html(
+                `<span class="badge bg-dark text-white me-2">${GLOBAL_DATA.ticker_count} Tickers</span>` +
+                `<span class="badge bg-secondary text-white">Total Cap: ${fmtMoney(GLOBAL_DATA.total_market_cap)}</span>`
+            );
+
+            // Components
+            renderDonut(GLOBAL_DATA.donut_data);
+            renderTable(); // Initial render
+        }
+
+        // 3. RENDER TABLE (Dynamic Timeframe)
+        function renderTable() {
+            if (TABLE_INSTANCE) {
+                TABLE_INSTANCE.destroy();
+            }
+
+            const tfKey = $('#tfSelector').val(); // change_1d, change_1m, change_ytd
+            const tbody = $('#tableBody');
+            tbody.empty();
+
+            GLOBAL_DATA.stocks.forEach(stock => {
+                const changeVal = stock[tfKey];
+                const changeDisplay = changeVal !== null ? changeVal.toFixed(2) + '%' : '-';
+
+                let badgeClass = 'pct-neu';
+                let sign = '';
+                if (changeVal > 0) { badgeClass = 'pct-pos'; sign = '+'; }
+                else if (changeVal < 0) { badgeClass = 'pct-neg'; }
+
+                const rowHtml = `
+                    <tr>
+                        <td><span class="symbol-badge">${stock.symbol}</span></td>
+                        <td><div class="fw-bold text-dark">${stock.company}</div></td>
+                        <td class="text-end" data-order="${stock.market_cap}">${fmtMoney(stock.market_cap)}</td>
+                        <td class="text-end">${stock.pe_ratio ? stock.pe_ratio.toFixed(2) : '-'}</td>
+                        <td class="text-center">
+                            <span class="pct-badge ${badgeClass} chart-trigger" 
+                                  data-symbol="${stock.symbol}" 
+                                  style="cursor:crosshair">
+                                ${sign}${changeDisplay}
+                            </span>
+                        </td>
+                        <td class="text-end">${fmtNum(stock.volume)}</td>
+                        <td class="text-end">${fmtMoney(stock.revenue)}</td>
+                    </tr>
+                `;
+                tbody.append(rowHtml);
+            });
+
+            // Re-init DataTable
+            TABLE_INSTANCE = $('#stocksTable').DataTable({
+                paging: false,
+                info: false,
+                order: [[2, 'desc']], // Market Cap
+                columnDefs: [
+                    { targets: [2, 3, 5, 6], className: 'text-end' }
+                ]
+            });
+        }
+
+        // 4. DONUT CHART
+        function renderDonut(data) {
+            const options = {
+                series: data.series,
+                labels: data.labels,
+                chart: { type: 'donut', height: 350, fontFamily: 'Inter' },
+                colors: ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#e2e8f0'],
+                plotOptions: {
+                    pie: { donut: { size: '75%', labels: { show: true, total: { show: true, label: 'Total Cap', formatter: () => fmtMoney(GLOBAL_DATA.total_market_cap) } } } }
+                },
+                legend: { position: 'bottom' },
+                dataLabels: { enabled: false },
+                tooltip: { y: { formatter: (val) => fmtMoney(val) } }
+            };
+
+            // Clear prev chart if any (simple way: empty div)
+            document.querySelector("#marketCapChart").innerHTML = "";
+            new ApexCharts(document.querySelector("#marketCapChart"), options).render();
+        }
+
+        // 5. HOVER CHART
+        $(document).on('mouseenter', '.chart-trigger', function (e) {
+            const symbol = $(this).data('symbol');
+            const stock = GLOBAL_DATA.stocks.find(s => s.symbol === symbol);
+
+            if (!stock || !stock.history || stock.history.length === 0) return;
+
+            // Setup Data
+            const hist = stock.history; // full history from API
+            const lastP = hist[hist.length - 1].y;
+            const startP = hist[0].y;
+            const color = lastP >= startP ? '#15803d' : '#b91c1c';
+
+            $('#tooltipSymbol').text(symbol);
+            $('#tooltipValue').html(`<span style="color:${color}">$${lastP.toFixed(2)}</span>`);
+
+            // Tooltip Position
+            const tooltip = $('#chartTooltip');
+            tooltip.css({ top: e.clientY + 15, left: e.clientX + 15 }).fadeIn(100);
+
+            // Render Sparkline
+            if (SPARKLINE_INSTANCE) SPARKLINE_INSTANCE.destroy();
+
+            SPARKLINE_INSTANCE = new ApexCharts(document.querySelector("#sparklineChart"), {
+                series: [{ data: hist }],
+                chart: { type: 'area', height: 100, sparkline: { enabled: true } },
+                stroke: { curve: 'smooth', width: 2, colors: [color] },
+                fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.0, stops: [0, 100] }, colors: [color] },
+                tooltip: { fixed: { enabled: false }, x: { show: true }, y: { title: { formatter: () => '' } } }
+            });
+            SPARKLINE_INSTANCE.render();
+
+        }).on('mouseleave', '.chart-trigger', function () {
+            $('#chartTooltip').hide();
+        });
+
+        // 6. EVENT LISTENERS
+        $('#tfSelector').on('change', function () {
+            renderTable(); // Re-render table with new timeframe
+        });
+
+        // INIT
+        $(document).ready(fetchData);
+
+        // UTILS
+        function fmtMoney(val) {
+            if (!val) return '-';
+            if (val >= 1e9) return "$" + (val / 1e9).toFixed(1) + "B";
+            if (val >= 1e6) return "$" + (val / 1e6).toFixed(1) + "M";
+            return "$" + val.toLocaleString();
+        }
+        function fmtNum(val) {
+            if (!val) return '-';
+            if (val >= 1e9) return (val / 1e9).toFixed(1) + "B";
+            if (val >= 1e6) return (val / 1e6).toFixed(1) + "M";
+            return val.toLocaleString();
+        }
+
+    </script>
+</body>
+
+</html>

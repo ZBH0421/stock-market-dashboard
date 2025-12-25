@@ -42,138 +42,130 @@ def get_industries():
 @app.get("/api/industry/{industry_name}")
 def get_industry_data(industry_name: str):
     try:
-        industry_name = industry_name.capitalize()
-        
         with db.engine.connect() as conn:
-            # 1. Get Industry ID
-            ind_query = text("SELECT id FROM industries WHERE name = :name")
+            # 1. Get Industry ID (Try exact match first, then case-insensitive)
+            ind_query = text("SELECT id, name FROM industries WHERE name = :name")
             res = conn.execute(ind_query, {"name": industry_name}).fetchone()
+            
+            if not res:
+                # Case-insensitive fallback
+                ind_query_ci = text("SELECT id, name FROM industries WHERE LOWER(name) = LOWER(:name)")
+                res = conn.execute(ind_query_ci, {"name": industry_name}).fetchone()
+                
             if not res:
                 raise HTTPException(status_code=404, detail="Industry not found")
+            
             ind_id = res[0]
+            industry_display_name = res[1]
 
             # 2. Get Tickers
             t_query = text("""
-                SELECT ticker, company_name, market_cap, 
-                       pe_ratio, revenue
-                FROM tickers 
-                WHERE industry_id = :iid
-                ORDER BY market_cap DESC NULLS LAST
+                SELECT ticker, company_name, market_cap, pe_ratio, revenue
+                FROM tickers WHERE industry_id = :iid ORDER BY market_cap DESC NULLS LAST
             """)
             tickers_df = pd.read_sql(t_query, conn, params={"iid": ind_id})
-            
             if tickers_df.empty:
-                return {"industry": industry_name, "total_market_cap": 0, "ticker_count": 0, "donut_data": {"series":[], "labels":[]}, "stocks": []}
+                return {"industry": industry_display_name, "stocks": [], "ticker_count": 0, "donut_data": {"series":[], "labels":[]}, "total_market_cap": 0}
 
-            tickers = tickers_df['ticker'].tolist()
+            tickers_list = tickers_df['ticker'].tolist()
             
-            # 3. Fetch Prices (Fixing Table and adding Volume)
-            table_name = "us_daily_prices" 
-            p_real_query = text(f"""
-                SELECT symbol as ticker, date as market_date, 
-                       close as close_price, volume
-                FROM {table_name} 
-                WHERE symbol IN :tickers 
-                  AND date >= CURRENT_DATE - INTERVAL '730 days'
-                ORDER BY symbol, date
+            # 3. Fetch Prices
+            p_query = text("""
+                SELECT symbol as ticker, date as market_date, close as close_price, volume
+                FROM us_daily_prices WHERE symbol IN :tickers 
+                AND date >= CURRENT_DATE - INTERVAL '730 days'
+                ORDER BY market_date ASC
             """)
-            
-            prices_df = pd.read_sql(p_real_query, conn, params={"tickers": tuple(tickers)})
+            prices_df = pd.read_sql(p_query, conn, params={"tickers": tuple(tickers_list)})
+            if prices_df.empty:
+                 return {"industry": industry_display_name, "stocks": [], "ticker_count": len(tickers_list), "donut_data": {"series":[], "labels":[]}, "total_market_cap": 0}
+
             prices_df['market_date'] = pd.to_datetime(prices_df['market_date'])
+            
+            # --- Vectorized Performance Calculations ---
+            # Pre-calculate latest prices and volume for all tickers
+            ticker_groups = prices_df.groupby('ticker')
+            latest_prices = prices_df.sort_values('market_date').drop_duplicates('ticker', keep='last')
+            ticker_to_latest = latest_prices.set_index('ticker')
 
-            # 4. Helper for float safety
-            def safe_float(val):
-                if pd.isna(val) or val is None: return None
+            def get_bulk_pct_changes(months=0, days=0):
+                offsets = pd.DateOffset(months=months) if months > 0 else pd.DateOffset(days=days)
+                t_dates = latest_prices[['ticker', 'market_date']].copy()
+                t_dates['target'] = t_dates['market_date'] - offsets
+                
+                sp = pd.merge_asof(
+                    t_dates.sort_values('target'),
+                    prices_df.sort_values('market_date'),
+                    left_on='target', right_on='market_date', by='ticker', direction='backward'
+                )
+                m = pd.merge(latest_prices[['ticker', 'close_price']], sp[['ticker', 'close_price']], on='ticker', suffixes=('_now', '_start'))
+                m['change'] = ((m['close_price_now'] - m['close_price_start']) / m['close_price_start']) * 100
+                return m.set_index('ticker')['change'].to_dict()
+
+            c_1d = get_bulk_pct_changes(days=1)
+            c_1m = get_bulk_pct_changes(months=1)
+            c_2m = get_bulk_pct_changes(months=2)
+            c_3m = get_bulk_pct_changes(months=3)
+            c_6m = get_bulk_pct_changes(months=6)
+            c_12m = get_bulk_pct_changes(months=12)
+
+            cur_yr = pd.Timestamp.now().year
+            y_starts = prices_df[prices_df['market_date'].dt.year == cur_yr].sort_values('market_date').drop_duplicates('ticker', keep='first')
+            m_ytd = pd.merge(latest_prices[['ticker', 'close_price']], y_starts[['ticker', 'close_price']], on='ticker', suffixes=('_now', '_start'))
+            m_ytd['change'] = ((m_ytd['close_price_now'] - m_ytd['close_price_start']) / m_ytd['close_price_start']) * 100
+            c_ytd = m_ytd.set_index('ticker')['change'].to_dict()
+
+            # --- Result Assembly ---
+            def sf(v):
+                if pd.isna(v) or v is None: return None
+                return float(v) if math.isfinite(v) else None
+
+            def si(v):
+                if pd.isna(v) or v is None: return 0
                 try:
-                    f_val = float(val)
-                    return f_val if not (math.isnan(f_val) or math.isinf(f_val)) else None
-                except: return None
-
-            def get_pct_change(sub_df, months=0, days=0):
-                if sub_df.empty: return None
-                latest = sub_df.iloc[-1]
-                latest_date = latest['market_date']
-                
-                if months > 0:
-                    start_date = latest_date - pd.DateOffset(months=months)
-                elif days > 0:
-                    start_date = latest_date - pd.DateOffset(days=days)
-                else:
-                    return None
-                
-                # Find closest row ON or BEFORE start_date
-                match = sub_df[sub_df['market_date'] <= start_date]
-                if match.empty:
-                    start_row = sub_df.iloc[0]
-                else:
-                    start_row = match.iloc[-1]
-                
-                sp = start_row['close_price']
-                cp = latest['close_price']
-                if sp == 0: return 0.0
-                return ((cp - sp) / sp) * 100
+                    return int(float(v))
+                except: return 0
 
             result_data = []
-            total_mcap = safe_float(tickers_df['market_cap'].sum()) or 0.0
-            
             for _, row in tickers_df.iterrows():
                 t = row['ticker']
-                t_prices = prices_df[prices_df['ticker'] == t].sort_values('market_date').drop_duplicates('market_date')
-                latest_vol = t_prices.iloc[-1]['volume'] if not t_prices.empty else 0
+                hist = []
+                if t in ticker_groups.groups:
+                    group = ticker_groups.get_group(t).tail(1000)
+                    hist = [{"x": r['market_date'].strftime('%Y-%m-%d'), "y": sf(r['close_price'])} for _, r in group.iterrows()]
 
-                info = {
+                result_data.append({
                     "symbol": t,
                     "company": row['company_name'] or t,
-                    "market_cap": int(row['market_cap']) if pd.notnull(row['market_cap']) else 0,
-                    "pe_ratio": safe_float(row['pe_ratio']),
-                    "volume": int(latest_vol) if pd.notnull(latest_vol) else 0,
-                    "revenue": int(row['revenue']) if pd.notnull(row['revenue']) else 0
-                }
+                    "market_cap": si(row['market_cap']),
+                    "pe_ratio": sf(row['pe_ratio']),
+                    "volume": si(ticker_to_latest.at[t, 'volume'] if t in ticker_to_latest.index else 0),
+                    "revenue": si(row['revenue']),
+                    "change_1d": sf(c_1d.get(t)),
+                    "change_1m": sf(c_1m.get(t)),
+                    "change_2m": sf(c_2m.get(t)),
+                    "change_3m": sf(c_3m.get(t)),
+                    "change_6m": sf(c_6m.get(t)),
+                    "change_12m": sf(c_12m.get(t)),
+                    "change_ytd": sf(c_ytd.get(t)),
+                    "history": hist
+                })
 
-                if not t_prices.empty:
-                    info.update({
-                        "change_1d": safe_float(get_pct_change(t_prices, days=1)),
-                        "change_1m": safe_float(get_pct_change(t_prices, months=1)),
-                        "change_2m": safe_float(get_pct_change(t_prices, months=2)),
-                        "change_3m": safe_float(get_pct_change(t_prices, months=3)),
-                        "change_6m": safe_float(get_pct_change(t_prices, months=6)),
-                        "change_12m": safe_float(get_pct_change(t_prices, months=12)),
-                        "history": [{"x": r['market_date'].strftime('%Y-%m-%d'), "y": safe_float(r['close_price'])} for _, r in t_prices.tail(1000).iterrows()]
-                    })
-                    # YTD
-                    cur_yr = pd.Timestamp.now().year
-                    ytd = t_prices[t_prices['market_date'].dt.year == cur_yr]
-                    if len(ytd) > 1:
-                        v = ((ytd.iloc[-1]['close_price'] - ytd.iloc[0]['close_price']) / ytd.iloc[0]['close_price']) * 100
-                        info['change_ytd'] = safe_float(v)
-                    else: info['change_ytd'] = None
-                else:
-                    info.update({"change_1d":None, "change_1m":None, "change_2m":None, "change_3m":None, "change_6m":None, "change_12m":None, "change_ytd":None, "history":[]})
-
-                result_data.append(info)
-
-            # 5. Donut
             top_5 = tickers_df.head(5)
             others_mcap = tickers_df.iloc[5:]['market_cap'].sum() if len(tickers_df) > 5 else 0
-            donut_series = [safe_float(x) or 0.0 for x in top_5['market_cap'].tolist()]
+            donut_series = [sf(x) or 0.0 for x in top_5['market_cap'].tolist()]
             donut_labels = top_5['ticker'].tolist()
             if others_mcap > 0:
-                donut_series.append(safe_float(others_mcap))
+                donut_series.append(sf(others_mcap))
                 donut_labels.append("Others")
 
             return {
-                "industry": industry_name,
-                "total_market_cap": total_mcap,
-                "ticker_count": len(tickers),
-                "metadata": {
-                    "lookback_days": 730,
-                    "history_buffer": 1000,
-                    "server_time": pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
-                },
+                "industry": industry_display_name,
+                "total_market_cap": sf(tickers_df['market_cap'].sum()),
+                "ticker_count": len(tickers_list),
                 "donut_data": {"series": donut_series, "labels": donut_labels},
                 "stocks": result_data
             }
-
     except Exception as e:
         import traceback
         traceback.print_exc()

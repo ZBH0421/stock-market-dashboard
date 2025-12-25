@@ -42,15 +42,21 @@ def get_industries():
 @app.get("/api/industry/{industry_name}")
 def get_industry_data(industry_name: str):
     try:
-        industry_name = industry_name.capitalize()
-        
         with db.engine.connect() as conn:
-            # 1. Get Industry ID
-            ind_query = text("SELECT id FROM industries WHERE name = :name")
+            # 1. Get Industry ID (Try exact match first, then case-insensitive)
+            ind_query = text("SELECT id, name FROM industries WHERE name = :name")
             res = conn.execute(ind_query, {"name": industry_name}).fetchone()
+            
+            if not res:
+                # Case-insensitive fallback
+                ind_query_ci = text("SELECT id, name FROM industries WHERE LOWER(name) = LOWER(:name)")
+                res = conn.execute(ind_query_ci, {"name": industry_name}).fetchone()
+                
             if not res:
                 raise HTTPException(status_code=404, detail="Industry not found")
+            
             ind_id = res[0]
+            industry_display_name = res[1]
 
             # 2. Get Tickers
             t_query = text("""
@@ -159,7 +165,7 @@ def get_industry_data(industry_name: str):
                 donut_labels.append("Others")
 
             return {
-                "industry": industry_name,
+                "industry": industry_display_name,
                 "total_market_cap": total_mcap,
                 "ticker_count": len(tickers),
                 "metadata": {
