@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pandas
+sqlalchemy
+psycopg2-binary
+python-dotenv
+yfinance
+tqdm
+requests

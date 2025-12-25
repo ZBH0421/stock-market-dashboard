@@ -264,6 +264,7 @@
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script src="config.js"></script>
 
     <script>
         var stockData = {};
@@ -290,7 +291,7 @@
                 $('#marketCapChart').html('');
 
                 const safeIndustry = encodeURIComponent(industry);
-                const response = await fetch(`http://127.0.0.1:8000/api/industry/${safeIndustry}`);
+                const response = await fetch(`${API_BASE_URL}/api/industry/${safeIndustry}`);
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const data = await response.json();
 
@@ -408,7 +409,7 @@
         $(document).ready(async function () {
             // Populate Industry Selector
             try {
-                const res = await fetch('http://127.0.0.1:8000/api/industries');
+                const res = await fetch(`${API_BASE_URL}/api/industries`);
                 const data = await res.json();
                 const selector = $('#industrySelector');
                 selector.empty();
