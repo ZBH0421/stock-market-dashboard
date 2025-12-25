@@ -32,7 +32,6 @@ batch_*.py
 main.py
 plot_*.py
 generate_*.py
-index.html
 dynamic_report.html
 report.html
 PLOT/
