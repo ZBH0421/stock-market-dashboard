@@ -287,7 +287,8 @@
                 $('#stocksTableBody').html('<tr><td colspan="14" class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><div class="mt-2 text-muted">Loading Market Data...</div></td></tr>');
                 $('#marketCapChart').html('');
 
-                const response = await fetch(`http://127.0.0.1:8000/api/industry/${industry}`);
+                const safeIndustry = encodeURIComponent(industry);
+                const response = await fetch(`http://127.0.0.1:8000/api/industry/${safeIndustry}`);
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const data = await response.json();
 

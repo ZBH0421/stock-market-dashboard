@@ -140,8 +140,9 @@
 
                 data.industries.forEach(ind => {
                     const firstChar = ind.charAt(0);
+                    const safeInd = encodeURIComponent(ind);
                     const card = `
-                        <a href="index.html?industry=${ind}" class="industry-card">
+                        <a href="index.html?industry=${safeInd}" class="industry-card">
                             <div class="icon-box">${firstChar}</div>
                             <div class="industry-name">${ind}</div>
                         </a>
