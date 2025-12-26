@@ -16,7 +16,6 @@
         :root {
             /* Light Theme (Default) */
             --bg-body: #f8fafc;
-            /* Lighter slate */
             --bg-card: #ffffff;
             --bg-header: #ffffff;
             --text-primary: #0f172a;
@@ -26,7 +25,8 @@
 
             --table-head-bg: #f8fafc;
             --table-text: #334155;
-            --table-row-hover: rgba(241, 245, 249, 0.5);
+            --table-row-hover: #f1f5f9;
+            --table-border: #e2e8f0;
 
             /* Badges */
             --pos-bg: #dcfce7;
@@ -48,20 +48,26 @@
         [data-theme="dark"] {
             /* Dark Theme */
             --bg-body: #0f172a;
-            /* Dark slate */
             --bg-card: #1e293b;
             --bg-header: #1e293b;
             --text-primary: #f8fafc;
             --text-secondary: #94a3b8;
             --border-color: #334155;
             --accent-blue: #60a5fa;
-            /* Lighter blue for dark mode */
 
             --table-head-bg: #1e293b;
             --table-text: #e2e8f0;
             --table-row-hover: rgba(51, 65, 85, 0.5);
+            --table-border: #334155;
 
-            /* Badges (Dark Mode adjusted) */
+            /* Bootstrap Overrides for Dark Mode */
+            --bs-table-bg: transparent;
+            --bs-table-color: var(--text-primary);
+            --bs-table-border-color: var(--border-color);
+            --bs-table-hover-bg: var(--table-row-hover);
+            --bs-table-hover-color: var(--text-primary);
+
+            /* Badges */
             --pos-bg: rgba(22, 163, 74, 0.2);
             --pos-text: #4ade80;
             --neg-bg: rgba(220, 38, 38, 0.2);
@@ -106,7 +112,6 @@
             border-radius: 16px;
             border: 1px solid var(--border-color);
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-            /* Shadow might be subtle in dark mode */
             padding: 1.5rem;
             height: 100%;
             transition: background 0.3s ease, border-color 0.3s ease;
@@ -131,6 +136,8 @@
         /* DataTable Overrides */
         table.dataTable {
             border-collapse: collapse !important;
+            width: 100% !important;
+            border-bottom: none !important;
         }
 
         table.dataTable thead th {
@@ -149,10 +156,31 @@
             padding: 1rem !important;
             color: var(--table-text);
             border-bottom: 1px solid var(--border-color);
+            background-color: transparent !important;
+            /* Force trans to pickup row hover */
         }
 
-        .table-hover tbody tr:hover {
-            background-color: var(--table-row-hover);
+        /* DataTables Wrapper Text Color */
+        .dataTables_wrapper .dataTables_length,
+        .dataTables_wrapper .dataTables_filter,
+        .dataTables_wrapper .dataTables_info,
+        .dataTables_wrapper .dataTables_processing,
+        .dataTables_wrapper .dataTables_paginate {
+            color: var(--text-secondary) !important;
+        }
+
+        /* Pagination Buttons */
+        .dataTables_wrapper .dataTables_paginate .paginate_button {
+            color: var(--text-primary) !important;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button.disabled {
+            color: var(--text-secondary) !important;
+        }
+
+        .table-hover tbody tr:hover td {
+            background-color: var(--table-row-hover) !important;
+            color: var(--text-primary);
         }
 
         /* Inputs & Selects */
@@ -167,6 +195,21 @@
             color: var(--text-primary);
             border-color: var(--accent-blue);
             box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25);
+        }
+
+        /* Search Input in DataTables */
+        input[type="search"] {
+            background-color: var(--bg-card);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 4px 8px;
+        }
+
+        input[type="search"]:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            color: var(--text-primary);
         }
 
         /* Badges */
@@ -200,7 +243,6 @@
 
         .badge-pct:hover {
             filter: brightness(0.96);
-            /* Might need adjustment for dark mode, usually opacity is safer */
             transform: translateY(-1px);
         }
 
@@ -421,13 +463,7 @@
         if (savedTheme === 'dark') {
             enableDarkMode();
         } else {
-            // Default to Light? Index was originally light. Let's keep it consistent with home.html which defaults to dark.
-            // But wait, the original index.html was light theme. 
-            // If home.html defaults to Dark, index should probably respect user choice or default to dark if not set.
-            // Let's check logic: home defaulst to Dark. Index was Light. 
-            // Better to sync them. If no pref, default to... let's say Light for dashboard readability, OR check system pref.
-            // For now, if no pref is set, I'll default to Light to match original look, 
-            // UNLESS user switched it in home.html (which saves to localStorage).
+            // Default to Light unless saved otherwise, matching previous logic
         }
 
         toggleBtn.addEventListener('click', () => {
@@ -439,7 +475,7 @@
         });
 
         function enableLightMode() {
-            root.removeAttribute('data-theme'); // Default is Light in CSS variables above :root
+            root.removeAttribute('data-theme'); // Default is Light in CSS
             localStorage.setItem('theme', 'light');
             sunIcon.style.display = 'none';
             moonIcon.style.display = 'block';
@@ -456,7 +492,6 @@
 
         // ApexChart Theme Update
         function updateChartTheme(theme) {
-            // If chart exists, update options
             if (window.donutChart) {
                 window.donutChart.updateOptions({
                     theme: { mode: theme },
@@ -498,7 +533,6 @@
 
                 // Show Loading
                 $('#stocksTableBody').html('<tr><td colspan="14" class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><div class="mt-2 text-muted">Loading Market Data...</div></td></tr>');
-                // Don't clear chart immediately to avoid flash, but maybe overlay? For now clear.
                 $('#marketCapChart').html('');
 
                 const safeIndustry = encodeURIComponent(industry);
@@ -575,7 +609,6 @@
                 $('#marketCapChart').html('<div class="text-center text-muted py-5">No Market Cap Data</div>');
                 return;
             }
-            // Determine current theme color for labels
             const isDark = root.getAttribute('data-theme') === 'dark';
             const valColor = isDark ? '#f8fafc' : '#1e293b';
             const subColor = isDark ? '#94a3b8' : '#64748b';
@@ -641,7 +674,7 @@
 
             // Smart Home Link Logic
             if (document.referrer.includes('home_phone.html') || window.innerWidth <= 768) {
-                $('#homeLink').attr('href', 'home.html'); // Actually always home.html now since we merged
+                $('#homeLink').attr('href', 'home.html');
             }
 
             // Industry Selector Change
@@ -693,17 +726,13 @@
 
                 var valText = $(this).text().trim();
                 var color = $(this).hasClass('pct-pos') ? '#166534' : '#991b1b';
-                // Adjust tooltip chart color for dark mode valid contrast? 
-                // Green #166534 is quite dark, maybe lighten for dark mode?
-                // For simplicity, keeping core logic, assuming tooltip has light bg by default or variable
-                // The tooltip itself uses var(--tooltip-bg), so it looks okay. The text color inside tooltip header needs distinct style.
+
                 const isDark = root.getAttribute('data-theme') === 'dark';
                 const textColor = isDark ? '#f8fafc' : '#0f172a';
                 const subTextColor = isDark ? '#94a3b8' : '#64748b';
 
-                // Color override for better visibility in Dark Mode
-                if (isDark && color === '#166534') color = '#4ade80'; // brighter green
-                if (isDark && color === '#991b1b') color = '#f87171'; // brighter red
+                if (isDark && color === '#166534') color = '#4ade80';
+                if (isDark && color === '#991b1b') color = '#f87171';
 
                 $('#tooltipHeader').html(`
                     <div style="display:flex; justify-content:space-between; align-items:flex-start;">

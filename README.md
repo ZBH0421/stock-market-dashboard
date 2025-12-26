@@ -82,3 +82,18 @@ python daily_update.py
 This project prioritizes accuracy. The backend logic handles:
 - **Missing Data**: Graceful handling of null values or suspended tickers.
 - **Orphan Checks**: Scripts like `check_orphans.py` ensure synchronization between tickers and price history.
+
+## ☁️ 雲端服務限制 (Cloud Free Tier Notes)
+
+如果您使用的是免費方案，請留意：
+
+1.  **Render (Backend API)**
+    *   **休眠機制**：15 分鐘無人使用後會自動休眠。
+    *   **冷啟動 (Cold Start)**：下次訪問時需等待 **30~60 秒** 喚醒伺服器。前端可能會暫時無回應，屬正常現象。
+
+2.  **Supabase (Database)**
+    *   **暫停機制**：若 7 天內無任何連線流量，專案會被暫停 (Paused)。
+    *   **恢復**：需登入 Supabase 官網手動點擊恢復。
+
+3.  **Vercel (Frontend)**
+    *   **無休眠**：靜態託管，隨時保持秒開。
