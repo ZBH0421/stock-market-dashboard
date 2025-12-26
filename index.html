@@ -7,24 +7,75 @@
     <title>Market Intelligence Dashboard</title>
 
     <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap"
         rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
 
     <style>
         :root {
-            --bg-body: #f1f5f9;
+            /* Light Theme (Default) */
+            --bg-body: #f8fafc;
+            /* Lighter slate */
             --bg-card: #ffffff;
+            --bg-header: #ffffff;
             --text-primary: #0f172a;
             --text-secondary: #64748b;
+            --border-color: #e2e8f0;
             --accent-blue: #3b82f6;
+
+            --table-head-bg: #f8fafc;
+            --table-text: #334155;
+            --table-row-hover: rgba(241, 245, 249, 0.5);
+
+            /* Badges */
             --pos-bg: #dcfce7;
             --pos-text: #166534;
             --neg-bg: #fee2e2;
             --neg-text: #991b1b;
             --neu-bg: #f1f5f9;
             --neu-text: #475569;
+
+            --symbol-bg: #eff6ff;
+            --symbol-text: #3b82f6;
+
+            /* Tooltip */
+            --tooltip-bg: #ffffff;
+            --tooltip-border: #cbd5e1;
+            --tooltip-text: #0f172a;
+        }
+
+        [data-theme="dark"] {
+            /* Dark Theme */
+            --bg-body: #0f172a;
+            /* Dark slate */
+            --bg-card: #1e293b;
+            --bg-header: #1e293b;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --border-color: #334155;
+            --accent-blue: #60a5fa;
+            /* Lighter blue for dark mode */
+
+            --table-head-bg: #1e293b;
+            --table-text: #e2e8f0;
+            --table-row-hover: rgba(51, 65, 85, 0.5);
+
+            /* Badges (Dark Mode adjusted) */
+            --pos-bg: rgba(22, 163, 74, 0.2);
+            --pos-text: #4ade80;
+            --neg-bg: rgba(220, 38, 38, 0.2);
+            --neg-text: #f87171;
+            --neu-bg: rgba(71, 85, 105, 0.3);
+            --neu-text: #cbd5e1;
+
+            --symbol-bg: rgba(59, 130, 246, 0.15);
+            --symbol-text: #bfdbfe;
+
+            /* Tooltip */
+            --tooltip-bg: #1e293b;
+            --tooltip-border: #475569;
+            --tooltip-text: #f8fafc;
         }
 
         body {
@@ -32,6 +83,7 @@
             background-color: var(--bg-body);
             color: var(--text-primary);
             padding-bottom: 60px;
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
 
         .page-header {
@@ -41,7 +93,7 @@
 
         .page-title {
             font-weight: 800;
-            color: #1e293b;
+            color: var(--text-primary);
             letter-spacing: -0.025em;
         }
 
@@ -52,43 +104,72 @@
         .dashboard-card {
             background: var(--bg-card);
             border-radius: 16px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid var(--border-color);
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            /* Shadow might be subtle in dark mode */
             padding: 1.5rem;
             height: 100%;
+            transition: background 0.3s ease, border-color 0.3s ease;
         }
 
         .table-card {
             border-radius: 16px;
             overflow: hidden;
-            border: 1px solid #e2e8f0;
-            background: white;
+            border: 1px solid var(--border-color);
+            background: var(--bg-card);
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            transition: background 0.3s ease, border-color 0.3s ease;
         }
 
         .table-header {
             padding: 1.25rem 1.5rem;
-            border-bottom: 1px solid #e2e8f0;
-            background: white;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-header);
+            transition: background 0.3s ease, border-color 0.3s ease;
+        }
+
+        /* DataTable Overrides */
+        table.dataTable {
+            border-collapse: collapse !important;
         }
 
         table.dataTable thead th {
-            background-color: #f8fafc !important;
-            color: #475569;
+            background-color: var(--table-head-bg) !important;
+            color: var(--text-secondary);
             font-weight: 600;
             font-size: 0.8rem;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            border-bottom: 1px solid #e2e8f0 !important;
+            border-bottom: 1px solid var(--border-color) !important;
         }
 
         table.dataTable tbody td {
             vertical-align: middle;
             font-size: 0.9rem;
             padding: 1rem !important;
-            color: #334155;
+            color: var(--table-text);
+            border-bottom: 1px solid var(--border-color);
         }
 
+        .table-hover tbody tr:hover {
+            background-color: var(--table-row-hover);
+        }
+
+        /* Inputs & Selects */
+        .form-select {
+            background-color: var(--bg-card);
+            color: var(--text-primary);
+            border-color: var(--border-color);
+        }
+
+        .form-select:focus {
+            background-color: var(--bg-card);
+            color: var(--text-primary);
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25);
+        }
+
+        /* Badges */
         .badge-pct {
             display: inline-flex;
             align-items: center;
@@ -119,35 +200,41 @@
 
         .badge-pct:hover {
             filter: brightness(0.96);
+            /* Might need adjustment for dark mode, usually opacity is safer */
             transform: translateY(-1px);
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        [data-theme="dark"] .badge-pct:hover {
+            filter: brightness(1.2);
         }
 
         .symbol-badge {
-            background-color: #eff6ff;
-            color: var(--accent-blue);
+            background-color: var(--symbol-bg);
+            color: var(--symbol-text);
             padding: 4px 8px;
             border-radius: 6px;
             font-weight: 700;
             font-size: 0.85rem;
         }
 
+        /* Tooltip */
         #chartTooltip {
             position: fixed;
             display: none;
             width: 380px;
             min-height: 280px;
-            background: #ffffff;
-            border: 1px solid #cbd5e1;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            background: var(--tooltip-bg);
+            border: 1px solid var(--tooltip-border);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
             z-index: 9999;
             border-radius: 16px;
             padding: 20px;
             pointer-events: none;
+            color: var(--tooltip-text);
         }
 
         #tooltipHeader {
-            border-bottom: 2px solid #f1f5f9;
+            border-bottom: 2px solid var(--border-color);
             margin-bottom: 10px;
             padding-bottom: 10px;
         }
@@ -157,10 +244,66 @@
             height: 150px;
             margin-top: 5px;
         }
+
+        /* --- THEME TOGGLE BUTTON --- */
+        .theme-toggle {
+            position: fixed;
+            /* Fixed position for easy access */
+            top: 20px;
+            right: 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            z-index: 1050;
+            /* Above bootstrap modal/navs */
+        }
+
+        .theme-toggle:hover {
+            transform: rotate(15deg);
+            background: var(--border-color);
+            /* Slight darkening */
+        }
+
+        /* Mobile adjust */
+        @media (max-width: 768px) {
+            .theme-toggle {
+                top: 15px;
+                right: 15px;
+            }
+
+            .page-header .col-md-6.text-md-end {
+                justify-content: flex-start !important;
+                /* Stack selector on mobile */
+            }
+        }
     </style>
 </head>
 
 <body>
+    <!-- Theme Toggle -->
+    <button class="theme-toggle" id="themeToggle" title="Toggle Dark/Light Mode">
+        <!-- Sun Icon (for Dark Mode) -->
+        <svg id="iconSun" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
+            class="bi bi-sun-fill" viewBox="0 0 16 16" style="display:none;">
+            <path
+                d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0zm0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13zM2.343 2.343a.5.5 0 0 1 .707 0l1.414 1.414a.5.5 0 1 1-.707.707L2.343 3.05a.5.5 0 0 1 0-.707zm11.314 8.486a.5.5 0 0 1 0 .707l-1.414 1.414a.5.5 0 1 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0zM1.293 7.5a.5.5 0 0 1-.5.5h2a.5.5 0 0 1 0-1h-2a.5.5 0 0 1 .5.5zm10 0a.5.5 0 0 1 .5.5h2a.5.5 0 0 1 0-1h-2a.5.5 0 0 1 .5.5zM3.5 4.5a.5.5 0 0 1 .707 0l1.414 1.414a.5.5 0 1 1-.707.707L3.5 5.207a.5.5 0 0 1 0-.707zm8.486 8.486a.5.5 0 0 1 .707 0l1.414 1.414a.5.5 0 1 1-.707.707l-1.414-1.414a.5.5 0 0 1 0-.707z" />
+        </svg>
+        <!-- Moon Icon (for Light Mode) -->
+        <svg id="iconMoon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
+            class="bi bi-moon-fill" viewBox="0 0 16 16">
+            <path
+                d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z" />
+        </svg>
+    </button>
 
     <div class="container main-container">
         <div class="page-header row align-items-end">
@@ -190,8 +333,8 @@
             <div class="col-lg-8">
                 <div class="dashboard-card d-flex flex-column">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="fw-bold mb-0" style="color: #334155;">Market Cap Distribution</h5>
-                        <span class="badge bg-light text-secondary" id="chartSubtitle">Top 5 vs Others</span>
+                        <h5 class="fw-bold mb-0" style="color: var(--text-primary);">Market Cap Distribution</h5>
+                        <span class="badge bg-light text-secondary border" id="chartSubtitle">Top 5 vs Others</span>
                     </div>
                     <div id="marketCapChart" class="flex-grow-1" style="min-height: 300px;"></div>
                 </div>
@@ -199,7 +342,7 @@
 
             <div class="col-lg-4">
                 <div class="dashboard-card">
-                    <h5 class="fw-bold mb-3" style="color: #334155;">Settings</h5>
+                    <h5 class="fw-bold mb-3" style="color: var(--text-primary);">Settings</h5>
                     <div class="mb-3">
                         <label class="form-label text-secondary small fw-bold">PERFORMANCE TIMEFRAME</label>
                         <select id="tfSelector" class="form-select form-select-lg">
@@ -212,9 +355,9 @@
                             <option value="YTD">YTD</option>
                         </select>
                     </div>
-                    <div class="p-3 bg-light rounded-3 border mt-4">
+                    <div class="p-3 rounded-3 border mt-4" style="background-color: var(--neu-bg);">
                         <small class="text-muted d-block mb-1"><strong>Pro Tip:</strong></small>
-                        <span style="font-size: 0.9rem; color: #475569;">
+                        <span style="font-size: 0.9rem; color: var(--text-secondary);">
                             Hover over any % value in the table to see the price trend chart.
                         </span>
                     </div>
@@ -224,10 +367,10 @@
 
         <div class="table-card mb-5">
             <div class="table-header">
-                <h5 class="fw-bold mb-0" style="color: #334155;">Detailed Market Data</h5>
+                <h5 class="fw-bold mb-0" style="color: var(--text-primary);">Detailed Market Data</h5>
             </div>
             <div class="table-responsive">
-                <table id="stocksTable" class="table mb-0" style="width:100%">
+                <table id="stocksTable" class="table table-hover mb-0" style="width:100%">
                     <thead>
                         <tr>
                             <th>#</th>
@@ -247,7 +390,7 @@
                         </tr>
                     </thead>
                     <tbody id="stocksTableBody">
-                        <!-- Dynamic rows will be inserted here -->
+                        <!-- Dynamic rows -->
                     </tbody>
                 </table>
             </div>
@@ -267,12 +410,79 @@
     <script src="config.js"></script>
 
     <script>
+        // --- Theme Logic ---
+        const toggleBtn = document.getElementById('themeToggle');
+        const sunIcon = document.getElementById('iconSun');
+        const moonIcon = document.getElementById('iconMoon');
+        const root = document.documentElement;
+
+        // Check Local Storage
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'dark') {
+            enableDarkMode();
+        } else {
+            // Default to Light? Index was originally light. Let's keep it consistent with home.html which defaults to dark.
+            // But wait, the original index.html was light theme. 
+            // If home.html defaults to Dark, index should probably respect user choice or default to dark if not set.
+            // Let's check logic: home defaulst to Dark. Index was Light. 
+            // Better to sync them. If no pref, default to... let's say Light for dashboard readability, OR check system pref.
+            // For now, if no pref is set, I'll default to Light to match original look, 
+            // UNLESS user switched it in home.html (which saves to localStorage).
+        }
+
+        toggleBtn.addEventListener('click', () => {
+            if (root.getAttribute('data-theme') === 'dark') {
+                enableLightMode();
+            } else {
+                enableDarkMode();
+            }
+        });
+
+        function enableLightMode() {
+            root.removeAttribute('data-theme'); // Default is Light in CSS variables above :root
+            localStorage.setItem('theme', 'light');
+            sunIcon.style.display = 'none';
+            moonIcon.style.display = 'block';
+            updateChartTheme('light');
+        }
+
+        function enableDarkMode() {
+            root.setAttribute('data-theme', 'dark');
+            localStorage.setItem('theme', 'dark');
+            sunIcon.style.display = 'block';
+            moonIcon.style.display = 'none';
+            updateChartTheme('dark');
+        }
+
+        // ApexChart Theme Update
+        function updateChartTheme(theme) {
+            // If chart exists, update options
+            if (window.donutChart) {
+                window.donutChart.updateOptions({
+                    theme: { mode: theme },
+                    chart: { background: 'transparent' },
+                    plotOptions: {
+                        pie: {
+                            donut: {
+                                labels: {
+                                    value: { color: theme === 'dark' ? '#f8fafc' : '#1e293b' },
+                                    total: { color: theme === 'dark' ? '#94a3b8' : '#64748b' }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        // --- Data Logic ---
         var stockData = {};
         var tooltipChart = null;
         var dataTableInstance = null;
         var currentIndustry = 'Airlines';
+        window.donutChart = null; // Global ref
 
-        // 1. Get Industry from URL or Default
+        // 1. Get Industry from URL
         const urlParams = new URLSearchParams(window.location.search);
         const indParam = urlParams.get('industry');
         if (indParam) {
@@ -286,8 +496,9 @@
                 // Update Title
                 $('#industryTitle').text(industry + " Market Report");
 
-                // Show Loading State
+                // Show Loading
                 $('#stocksTableBody').html('<tr><td colspan="14" class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><div class="mt-2 text-muted">Loading Market Data...</div></td></tr>');
+                // Don't clear chart immediately to avoid flash, but maybe overlay? For now clear.
                 $('#marketCapChart').html('');
 
                 const safeIndustry = encodeURIComponent(industry);
@@ -295,7 +506,7 @@
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const data = await response.json();
 
-                // Clear Data Cache
+                // Clear Cache
                 stockData = {};
                 data.stocks.forEach(s => { stockData[s.symbol] = s.history; });
 
@@ -329,16 +540,13 @@
                     tbody.append(row);
                 });
 
-                if (dataTableInstance) {
-                    dataTableInstance.destroy();
-                }
+                if (dataTableInstance) { dataTableInstance.destroy(); }
 
                 dataTableInstance = $('#stocksTable').DataTable({
                     pageLength: 25, order: [[3, 'desc']],
                     columnDefs: [{ targets: [6, 7, 8, 9, 10, 11], visible: false }]
                 });
 
-                // Apply current timeframe filter
                 const currentTf = $('#tfSelector').val();
                 applyTimeframe(currentTf);
 
@@ -367,27 +575,34 @@
                 $('#marketCapChart').html('<div class="text-center text-muted py-5">No Market Cap Data</div>');
                 return;
             }
+            // Determine current theme color for labels
+            const isDark = root.getAttribute('data-theme') === 'dark';
+            const valColor = isDark ? '#f8fafc' : '#1e293b';
+            const subColor = isDark ? '#94a3b8' : '#64748b';
+
             var options = {
                 series: donutData.series,
                 labels: donutData.labels,
-                chart: { type: 'donut', height: 320, fontFamily: 'Inter, sans-serif' },
+                chart: { type: 'donut', height: 320, fontFamily: 'Inter, sans-serif', background: 'transparent' },
                 colors: ['#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#2563eb', '#cbd5e1'],
+                theme: { mode: isDark ? 'dark' : 'light' },
+                stroke: { show: true, colors: isDark ? ['#1e293b'] : ['#fff'] },
                 plotOptions: {
                     pie: {
                         donut: {
                             size: '72%',
                             labels: {
                                 show: true,
-                                name: { show: true, fontSize: '15px', fontWeight: 600, color: '#64748b' },
+                                name: { show: true, fontSize: '15px', fontWeight: 600, color: subColor },
                                 value: {
-                                    show: true, fontSize: '22px', fontWeight: 800, color: '#1e293b',
+                                    show: true, fontSize: '22px', fontWeight: 800, color: valColor,
                                     formatter: function (val, opts) {
                                         var total = opts.globals.seriesTotals.reduce((a, b) => a + b, 0);
                                         return ((val / total) * 100).toFixed(1) + "%";
                                     }
                                 },
                                 total: {
-                                    show: true, label: 'TOTAL CAP', fontSize: '12px', fontWeight: 700, color: '#64748b',
+                                    show: true, label: 'TOTAL CAP', fontSize: '12px', fontWeight: 700, color: subColor,
                                     formatter: w => "$" + (w.globals.seriesTotals.reduce((a, b) => a + b, 0) / 1e9).toFixed(1) + "B"
                                 }
                             }
@@ -395,15 +610,17 @@
                     }
                 },
                 dataLabels: { enabled: false },
-                legend: { position: 'bottom', fontSize: '13px', markers: { radius: 12 } },
+                legend: { position: 'bottom', fontSize: '13px', markers: { radius: 12 }, labels: { colors: isDark ? '#cbd5e1' : '#475569' } },
                 tooltip: {
+                    theme: isDark ? 'dark' : 'light',
                     y: {
                         formatter: val => "$" + (val / 1e9).toFixed(2) + "B",
                         title: { formatter: (seriesName) => seriesName + ":" }
                     }
                 }
             };
-            new ApexCharts(document.querySelector("#marketCapChart"), options).render();
+            window.donutChart = new ApexCharts(document.querySelector("#marketCapChart"), options);
+            window.donutChart.render();
         }
 
         $(document).ready(async function () {
@@ -422,10 +639,9 @@
             // Initial Load
             loadData(currentIndustry);
 
-            // 0. Smart Home Link Logic
-            // If user came from home_phone.html OR is on a small screen, make Home button go to home_phone.html
+            // Smart Home Link Logic
             if (document.referrer.includes('home_phone.html') || window.innerWidth <= 768) {
-                $('#homeLink').attr('href', 'home_phone.html');
+                $('#homeLink').attr('href', 'home.html'); // Actually always home.html now since we merged
             }
 
             // Industry Selector Change
@@ -477,22 +693,32 @@
 
                 var valText = $(this).text().trim();
                 var color = $(this).hasClass('pct-pos') ? '#166534' : '#991b1b';
+                // Adjust tooltip chart color for dark mode valid contrast? 
+                // Green #166534 is quite dark, maybe lighten for dark mode?
+                // For simplicity, keeping core logic, assuming tooltip has light bg by default or variable
+                // The tooltip itself uses var(--tooltip-bg), so it looks okay. The text color inside tooltip header needs distinct style.
+                const isDark = root.getAttribute('data-theme') === 'dark';
+                const textColor = isDark ? '#f8fafc' : '#0f172a';
+                const subTextColor = isDark ? '#94a3b8' : '#64748b';
+
+                // Color override for better visibility in Dark Mode
+                if (isDark && color === '#166534') color = '#4ade80'; // brighter green
+                if (isDark && color === '#991b1b') color = '#f87171'; // brighter red
 
                 $('#tooltipHeader').html(`
                     <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                         <div>
-                            <div style="font-size:1.1rem; font-weight:800; color:#0f172a;">${symbol} <span style="font-weight:400; color:#64748b; font-size:0.85rem;">(${tf})</span></div>
-                            <div style="font-size:0.7rem; color:#64748b; margin-top:2px;">Data Points: ${filteredData.length}</div>
+                            <div style="font-size:1.1rem; font-weight:800; color:${textColor};">${symbol} <span style="font-weight:400; color:${subTextColor}; font-size:0.85rem;">(${tf})</span></div>
+                            <div style="font-size:0.7rem; color:${subTextColor}; margin-top:2px;">Data Points: ${filteredData.length}</div>
                         </div>
                         <div style="text-align:right;">
                             <div style="font-size:1.25rem; font-weight:800; color:${color}; line-height:1;">${valText}</div>
-                            <div style="font-size:0.7rem; color:#64748b; margin-top:6px; line-height:1.2;">
+                            <div style="font-size:0.7rem; color:${subTextColor}; margin-top:6px; line-height:1.2;">
                                 Start: ${filteredData[0].x} (<b>$${filteredData[0].y.toFixed(2)}</b>)<br>
                                 End: &nbsp;${filteredData[filteredData.length - 1].x} (<b>$${filteredData[filteredData.length - 1].y.toFixed(2)}</b>)
                             </div>
                         </div>
                     </div>
-                    ${isConflict ? '<div style="color:#ef4444; font-size:0.75rem; font-weight:700; border-top:1px solid #fee2e2; margin-top:8px; padding-top:6px; text-transform:uppercase;">⚠ Conflict: History too short. Restart API Server.</div>' : ''}
                 `);
 
                 var options = {
