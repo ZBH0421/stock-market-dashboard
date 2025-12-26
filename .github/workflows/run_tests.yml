@@ -1,0 +1,42 @@
+name: Run Unit Tests
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    env:
+        # Mock DB credentials for tests that might accidentally try to connect 
+        # (Real tests should mock the DB connection, but this prevents failing on missing env vars)
+        DB_HOST: "127.0.0.1"
+        DB_NAME: "test_db"
+        DB_USER: "test_user"
+        DB_PASSWORD: "test_password"
+        DB_PORT: 5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.9"
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest httpx # httpx is needed for FastAPI TestClient
+
+    - name: Run Tests
+      # Run all files starting with test_
+      # -v for verbose output
+      # -p no:warnings to keep logs clean
+      run: |
+        pytest -v -p no:warnings

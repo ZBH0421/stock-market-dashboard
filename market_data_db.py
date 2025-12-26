@@ -30,11 +30,16 @@ class MarketDataDB:
 
         # Connection String
         # url = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{dbname}"
-        db_url = f"postgresql+psycopg2://{config['DB_USER']}:{config['DB_PASSWORD']}@{config['DB_HOST']}:{config['DB_PORT']}/{config['DB_NAME']}"
+        db_url = f"postgresql+psycopg2://{config['DB_USER']}:{config['DB_PASSWORD']}@{config['DB_HOST']}:{config['DB_PORT']}/{config['DB_NAME']}?sslmode=require"
         
         # Create Engine
         # pool_size=10, max_overflow=20 for handling concurrent writes if needed
-        self.engine = create_engine(db_url, pool_size=10, max_overflow=20)
+        self.engine = create_engine(
+            db_url, 
+            pool_size=10, 
+            max_overflow=20,
+            pool_pre_ping=True # Auto-reconnect if connection drops
+        )
         
         # Schema Definition (Core)
         self.metadata = MetaData()

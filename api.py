@@ -5,6 +5,11 @@ from sqlalchemy import text
 import pandas as pd
 import math
 import uvicorn
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -14,9 +19,13 @@ app = FastAPI(
 )
 
 # Enable CORS (Cross-Origin Resource Sharing)
+# Production: Set ALLOWED_ORIGINS="https://your-frontend.com,https://another-domain.com"
+origins_raw = os.getenv("ALLOWED_ORIGINS", "*")
+origins = [origin.strip() for origin in origins_raw.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -28,6 +37,11 @@ db = MarketDataDB()
 @app.get("/")
 def read_root():
     return {"status": "ok", "message": "Market Data API is running"}
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint for Render/Kubernetes probes"""
+    return {"status": "healthy"}
 
 @app.get("/api/industries")
 def get_industries():
