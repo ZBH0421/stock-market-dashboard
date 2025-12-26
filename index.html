@@ -418,6 +418,7 @@
                             <th>#</th>
                             <th>Symbol</th>
                             <th>Company</th>
+                            <th>Price</th>
                             <th>Market Cap</th>
                             <th>P/E</th>
                             <th class="tf-1D">1D %</th>
@@ -538,7 +539,7 @@
                 $('#industryTitle').text(industry + " Market Report");
 
                 // Show Loading
-                $('#stocksTableBody').html('<tr><td colspan="14" class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><div class="mt-2 text-muted">Loading Market Data...</div></td></tr>');
+                $('#stocksTableBody').html('<tr><td colspan="15" class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><div class="mt-2 text-muted">Loading Market Data...</div></td></tr>');
                 $('#marketCapChart').html('');
 
                 const safeIndustry = encodeURIComponent(industry);
@@ -565,6 +566,7 @@
                             <td>${idx + 1}</td>
                             <td><span class="symbol-badge">${s.symbol}</span></td>
                             <td class="fw-medium">${s.company}</td>
+                            <td>${s.price ? '$' + s.price.toFixed(2) : '-'}</td>
                             <td data-order="${s.market_cap}">$${(s.market_cap / 1e9).toFixed(2)}B</td>
                             <td>${s.pe_ratio ? s.pe_ratio.toFixed(1) : '-'}</td>
                             ${renderPctCell(s.symbol, '1D', s.change_1d)}
@@ -581,10 +583,12 @@
                     tbody.append(row);
                 });
 
-                // Re-initialize DataTable
+                // Re-initialize DataTable (indices shifted by +1 due to Price column)
+                // Market Cap is now column 4 (was 3). 
+                // Hidden cols: 1D% (5->6), 1M% (6->7), etc.
                 dataTableInstance = $('#stocksTable').DataTable({
-                    pageLength: 25, order: [[3, 'desc']],
-                    columnDefs: [{ targets: [6, 7, 8, 9, 10, 11], visible: false }]
+                    pageLength: 25, order: [[4, 'desc']], // Sort by Market Cap (now col 4)
+                    columnDefs: [{ targets: [7, 8, 9, 10, 11, 12], visible: false }]
                 });
 
                 const currentTf = $('#tfSelector').val();
@@ -592,14 +596,15 @@
 
                 initDonutChart(data.donut_data);
             } catch (err) {
-                $('#stocksTableBody').html('<tr><td colspan="14" class="text-center text-danger py-4">Error: ' + err.message + '</td></tr>');
+                $('#stocksTableBody').html('<tr><td colspan="15" class="text-center text-danger py-4">Error: ' + err.message + '</td></tr>');
             }
         }
 
         function applyTimeframe(val) {
             if (!dataTableInstance) return;
-            const map = { '1D': 5, '1M': 6, '2M': 7, '3M': 8, '6M': 9, '12M': 10, 'YTD': 11 };
-            dataTableInstance.columns([5, 6, 7, 8, 9, 10, 11]).visible(false);
+            // Shifted indices by +1
+            const map = { '1D': 6, '1M': 7, '2M': 8, '3M': 9, '6M': 10, '12M': 11, 'YTD': 12 };
+            dataTableInstance.columns([6, 7, 8, 9, 10, 11, 12]).visible(false);
             dataTableInstance.column(map[val]).visible(true);
         }
 
@@ -686,7 +691,13 @@
             // Industry Selector Change
             $('#industrySelector').on('change', function () {
                 var newIndustry = $(this).val();
-                window.history.pushState({}, '', '?industry=' + newIndustry);
+                console.log("Industry selection changed to:", newIndustry);
+                try {
+                    window.history.pushState({}, '', '?industry=' + newIndustry);
+                } catch (e) {
+                    console.warn("Values pushState failed (likely due to file:// protocol or security settings). Ignoring.", e);
+                }
+                console.log("Calling loadData for:", newIndustry);
                 loadData(newIndustry);
             });
 

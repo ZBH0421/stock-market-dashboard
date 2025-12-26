@@ -153,6 +153,7 @@ def get_industry_data(industry_name: str):
                 result_data.append({
                     "symbol": t,
                     "company": row['company_name'] or t,
+                    "price": sf(ticker_to_latest.at[t, 'close_price'] if t in ticker_to_latest.index else None),
                     "market_cap": si(row['market_cap']),
                     "pe_ratio": sf(row['pe_ratio']),
                     "volume": si(ticker_to_latest.at[t, 'volume'] if t in ticker_to_latest.index else 0),
