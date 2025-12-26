@@ -1,0 +1,29 @@
+services:
+  # 1. Backend Service (FastAPI)
+  - type: web
+    name: stock-market-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -k uvicorn.workers.UvicornWorker api:app
+    envVars:
+      - key: DB_HOST
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_PORT
+        value: 5432 # or 6543 for Supabase Transaction Mode
+
+  # 2. Frontend (Static Site)
+  # Uncomment below if you want Render to host the HTML too
+  # - type: static
+  #   name: stock-market-dashboard
+  #   buildCommand: echo "No build needed"
+  #   staticPublishPath: ./
+  #   routes:
+  #     - type: rewrite
+  #       source: /*
+  #       destination: /home.html
