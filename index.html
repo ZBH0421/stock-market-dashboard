@@ -528,6 +528,12 @@
         // 2. Load Data Function
         async function loadData(industry) {
             try {
+                // 0. Reset DataTable (Critical Fix)
+                if (dataTableInstance) {
+                    dataTableInstance.destroy();
+                    dataTableInstance = null; // Ensure clean state
+                }
+
                 // Update Title
                 $('#industryTitle').text(industry + " Market Report");
 
@@ -536,7 +542,8 @@
                 $('#marketCapChart').html('');
 
                 const safeIndustry = encodeURIComponent(industry);
-                const response = await fetch(`${API_BASE_URL}/api/industry/${safeIndustry}`);
+                // Add timestamp to prevent caching
+                const response = await fetch(`${API_BASE_URL}/api/industry/${safeIndustry}?t=${new Date().getTime()}`);
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const data = await response.json();
 
@@ -574,8 +581,7 @@
                     tbody.append(row);
                 });
 
-                if (dataTableInstance) { dataTableInstance.destroy(); }
-
+                // Re-initialize DataTable
                 dataTableInstance = $('#stocksTable').DataTable({
                     pageLength: 25, order: [[3, 'desc']],
                     columnDefs: [{ targets: [6, 7, 8, 9, 10, 11], visible: false }]
