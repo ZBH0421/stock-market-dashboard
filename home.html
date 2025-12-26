@@ -128,11 +128,12 @@
     </div>
 
     <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script src="config.js"></script>
     <script>
         async function fetchIndustries() {
             $('#loading').show();
             try {
-                const response = await fetch('http://127.0.0.1:8000/api/industries');
+                const response = await fetch(`${API_BASE_URL}/api/industries`);
                 const data = await response.json();
 
                 const grid = $('#industryGrid');

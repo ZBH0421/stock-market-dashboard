@@ -1,24 +1,22 @@
-# Interactive Stock Market Intelligence Dashboard
+# Interactive Market Intelligence Dashboard
 
 A professional-grade, dynamic web application for stock market analysis and industry-specific financial reporting. This project integrates a high-performance **FastAPI** backend with a modern, glassmorphic **HTML5/JS** frontend to provide real-time insights into market trends, performance metrics, and valuation distributions.
-
-![Airlines Report Summary](Airlines_MarketCap_Pie.png)
 
 ## 🚀 Features
 
 ### 1. Dynamic Performance Analysis
-- **Multi-Timeframe Tracking**: Instant toggle between 1D, 1M, 2M, 3M, 6M, 12M, and YTD performance.
+- **Vectorized Calculations**: Backend uses Pandas vectorization to instantly calculate 1D, 1M, 2M, 3M, 6M, 12M, and YTD performance for hundreds of tickers.
 - **Precision Calendar Logic**: Accurate percentage change calculations using robust calendar-based slicing (mirroring professional trading platforms).
 
 ### 2. Interactive Visualizations
 - **Hover Sparklines**: Premium tooltips featuring high-resolution price trend charts.
-- **Dynamic Chart Scaling**: Charts automatically zoom into the relevant price range for the selected timeframe, highlighting micro-movements.
-- **Market Cap Distribution**: Interactive donut charts with professional unit scaling (Billions of USD) and industry aggregation.
+- **Dynamic Chart Scaling**: Charts automatically zoom into the relevant price range for the selected timeframe.
+- **Market Cap Distribution**: Interactive donut charts with professional unit scaling (Billions of USD).
 
 ### 3. Industrial-Strength Backend
 - **FastAPI Integration**: Asynchronous, high-throughput API serving industry-specific financial data.
-- **PostgreSQL Power**: Efficient SQL queries with optimized lookbacks (up to 2 years) and history buffers (1000 points).
-- **Graceful Error Handling**: Robust detection of stale data or history gaps with user-facing diagnostic warnings.
+- **PostgreSQL Power**: Efficient SQL queries with optimized lookbacks and history buffers.
+- **Incremental ETL**: `daily_update.py` script performs efficient incremental updates, fetching only missing data (T-5 window) with Upsert protection.
 
 ## 🛠️ Tech Stack
 
@@ -30,23 +28,19 @@ A professional-grade, dynamic web application for stock market analysis and indu
 ## 📂 Project Structure
 
 ```text
-├── api.py                  # Main FastAPI backend logic
-├── Airlines_Report.html     # Dynamic Interactive Frontend
-├── market_data_db.py       # SQL Alchemy database layer
-├── market_data_fetcher.py   # Stock data ingestion & processing
-├── schema.sql              # PostgreSQL database structure
-├── .env                    # Environment configuration (DB credentials)
-└── US_Stocks_Classified.xlsx # Ticker classification metadata
+├── home.html               # Main Entry Point (Industry Selection)
+├── index.html              # Dynamic Dashboard & Report View
+├── api.py                  # Main FastAPI backend
+├── daily_update.py         # Automated Daily ETL Script
+├── market_data_db.py       # Database Manager & Schema
+├── market_data_fetcher.py  # yfinance Data Ingestion
+├── config.js               # Frontend API Configuration
+└── schema.sql              # Database Schema Definition
 ```
 
 ## ⚙️ Setup & Installation
 
-### 1. Prerequisites
-- Python 3.9+
-- PostgreSQL Server
-- Ticker data populated (using `market_data_fetcher.py`)
-
-### 2. Configure Environment
+### 1. Configure Environment
 Create a `.env` file in the root directory:
 ```env
 DB_HOST=your_host
@@ -56,20 +50,35 @@ DB_PASSWORD=your_password
 DB_PORT=5432
 ```
 
-### 3. Install Dependencies
+### 2. Install Dependencies
 ```bash
-pip install fastapi sqlalchemy pandas psycopg2 uvicorn openpyxl
+pip install -r requirements.txt
 ```
 
-### 4. Running the Application
-1. **Start the API Server**:
-   ```bash
-   python api.py
-   ```
-2. **Open the Report**:
-   Open `Airlines_Report.html` in any modern web browser.
+### 3. Initialize Database
+Ensure your PostgreSQL database is running. The `market_data_db.py` module will automatically create tables (`industries`, `tickers`, `us_daily_prices`) on first run.
 
----
+## 🏃 Usage
 
-## 🔍 Accuracy & Precision
-This project prioritizes data integrity. The backend uses `pd.DateOffset` for precise monthly comparisons, while the frontend implements a robust, timezone-agnostic numeric calendar subtraction to ensure that table percentages and hover charts are always perfectly synchronized.
+### 1. Start the API Server
+Start the backend server to serve data to the frontend:
+```bash
+python api.py
+```
+*Server runs on http://127.0.0.1:8000*
+
+### 2. Open the Dashboard
+Open `home.html` in your browser.
+- Select an industry to view the detailed report (`index.html`).
+- Use the dropdowns to switch industries or performance timeframes.
+
+### 3. Daily Updates
+To keep data fresh, run the update script (CRON recommended):
+```bash
+python daily_update.py
+```
+
+## 🔍 Data Integrity
+This project prioritizes accuracy. The backend logic handles:
+- **Missing Data**: Graceful handling of null values or suspended tickers.
+- **Orphan Checks**: Scripts like `check_orphans.py` ensure synchronization between tickers and price history.
