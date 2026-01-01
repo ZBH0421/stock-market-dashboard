@@ -36,6 +36,6 @@ jobs:
           DB_USER: ${{ secrets.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_NAME: ${{ secrets.DB_NAME }}
-          DB_PORT: 5432 # Usually 5432, or 6543 for Supabase Pooling
+          DB_PORT: ${{ secrets.DB_PORT }}
         run: |
           python daily_update.py
