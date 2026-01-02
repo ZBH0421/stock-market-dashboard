@@ -81,6 +81,14 @@ class DailyUpdater:
                 self.db.save_daily_data(df)
                 success_count += 1
                 
+                # --- NEW: Update Fundamentals (Market Cap, PE, etc.) ---
+                try:
+                    info = self.fetcher.get_ticker_info(ticker)
+                    if info:
+                        self.db.update_ticker_fundamentals(ticker, info)
+                except Exception as e_fund:
+                    print(f"Warning: Could not update fundamentals for {ticker}: {e_fund}")
+
                 # Rate limit (be nice to yfinance)
                 time.sleep(0.2)
                 

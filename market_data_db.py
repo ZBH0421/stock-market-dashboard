@@ -145,6 +145,31 @@ class MarketDataDB:
         with self.engine.begin() as conn:
             conn.execute(stmt)
 
+    def update_ticker_fundamentals(self, ticker: str, info: dict):
+        """
+        Updates only the fundamental data for an existing ticker.
+        """
+        if not info:
+            return
+
+        values = {}
+        if 'market_cap' in info and info['market_cap']: values['market_cap'] = info['market_cap']
+        if 'revenue' in info and info['revenue']: values['revenue'] = info['revenue']
+        if 'gross_profit' in info and info['gross_profit']: values['gross_profit'] = info['gross_profit']
+        if 'net_income' in info and info['net_income']: values['net_income'] = info['net_income']
+        if 'pe_ratio' in info and info['pe_ratio']: values['pe_ratio'] = info['pe_ratio']
+        if 'profit_margin' in info and info['profit_margin']: values['profit_margin'] = info['profit_margin']
+        
+        if not values:
+            return
+
+        stmt = self.tickers_table.update().where(self.tickers_table.c.ticker == ticker).values(**values)
+        
+        with self.engine.begin() as conn:
+            result = conn.execute(stmt)
+            # if result.rowcount == 0:
+            #     print(f"[DB] Warning: Ticker {ticker} not found for update.")
+
     def save_daily_data(self, df: pd.DataFrame):
         """
         Efficiently UPSERTS (Insert on Conflict Update) a DataFrame into the database.
