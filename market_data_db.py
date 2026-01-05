@@ -79,6 +79,7 @@ class MarketDataDB:
             Column('close', Float),
             Column('adj_close', Float),
             Column('volume', BigInteger),
+            Column('market_cap', BigInteger), # New Column
             Column('updated_at', DateTime, server_default=func.now(), onupdate=func.now())
         )
         
@@ -94,8 +95,10 @@ class MarketDataDB:
             conn.execute(text("ALTER TABLE tickers ADD COLUMN IF NOT EXISTS pe_ratio FLOAT"))
             conn.execute(text("ALTER TABLE tickers ADD COLUMN IF NOT EXISTS profit_margin FLOAT"))
             conn.execute(text("ALTER TABLE tickers ADD COLUMN IF NOT EXISTS dividend_yield FLOAT"))
+            # New Migration for Prices
+            conn.execute(text("ALTER TABLE us_daily_prices ADD COLUMN IF NOT EXISTS market_cap BIGINT"))
 
-        print("[DB] Initialized MarketDataDB and verified schema (Industries -> Tickers -> Prices).")
+        print("[DB] Initialized MarketDataDB and verified schema (Industries -> Tickers -> Prices [w/ MCap]).")
 
     def get_or_create_industry(self, name: str) -> int:
         """
@@ -213,6 +216,10 @@ class MarketDataDB:
             'volume': stmt.excluded.volume,
             'updated_at': func.now() # Update timestamp
         }
+        
+        # Include market_cap if present in DataFrame
+        if 'market_cap' in data.columns:
+            update_dict['market_cap'] = stmt.excluded.market_cap
         
         upsert_stmt = stmt.on_conflict_do_update(
             index_elements=['symbol', 'date'], # Constraint columns

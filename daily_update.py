@@ -85,9 +85,21 @@ class DailyUpdater:
                 try:
                     info = self.fetcher.get_ticker_info(ticker)
                     if info:
+                        # 1. Update Ticker Fundamentals (The snapshot)
                         self.db.update_ticker_fundamentals(ticker, info)
+                        
+                        # 2. Add Market Cap to Daily Data (The history)
+                        # Use shares_outstanding to calculate market cap for the fetched daily data
+                        shares = info.get('shares_outstanding')
+                        if shares:
+                            # Apply to the entire fetched dataframe
+                            # This assumes shares count is constant for the fetch window (usually few days)
+                            df['market_cap'] = df['close'] * shares
+                            df['market_cap'] = df['market_cap'].fillna(0).astype('int64')
+
                 except Exception as e_fund:
                     print(f"Warning: Could not update fundamentals for {ticker}: {e_fund}")
+
 
                 # Rate limit (be nice to yfinance)
                 time.sleep(0.2)

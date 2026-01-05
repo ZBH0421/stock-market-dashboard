@@ -101,6 +101,7 @@ class MarketDataFetcher:
                 'net_income': info.get('netIncomeToCommon'),
                 'pe_ratio': info.get('trailingPE'),
                 'profit_margin': info.get('profitMargins'),
+                'shares_outstanding': info.get('sharesOutstanding'),
                 # 'dividend_yield': info.get('dividendYield'), # User requested to exclude this
                 'currency': info.get('currency', 'USD')
             }

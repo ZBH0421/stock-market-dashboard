@@ -188,5 +188,81 @@ def get_industry_data(industry_name: str):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/market-flow")
+def get_market_flow(days: int = 5):
+    """
+    Calculates estimated 'Money Flow' (Net Dollar Volume) into industries.
+    Logic: Sum(Volume * PriceChange) over the last N days.
+    Returns: List of industries sorted by net flow.
+    """
+    try:
+        with db.engine.connect() as conn:
+            # 1. Get Tickers and Industries
+            tickers_df = pd.read_sql(text("SELECT t.ticker, i.name as industry FROM tickers t JOIN industries i ON t.industry_id = i.id"), conn)
+            
+            # 2. Get Recent Prices (Fetch extra days to ensure we have previous close for the first day of the period)
+            query = text(f"""
+                SELECT symbol, date, close, volume 
+                FROM us_daily_prices 
+                WHERE date >= CURRENT_DATE - INTERVAL '{days + 5} days'
+                ORDER BY symbol, date ASC
+            """)
+            prices_df = pd.read_sql(query, conn)
+            
+            if prices_df.empty:
+                return {"items": []}
+
+            # 3. Calculate Daily Change & Money Flow
+            # Ensure sorting
+            prices_df = prices_df.sort_values(['symbol', 'date'])
+            prices_df['prev_close'] = prices_df.groupby('symbol')['close'].shift(1)
+            prices_df['price_change'] = prices_df['close'] - prices_df['prev_close']
+            prices_df['pct_change'] = (prices_df['price_change'] / prices_df['prev_close']) * 100
+            
+            # Net Flow = Volume * Price Change
+            prices_df['net_flow'] = prices_df['volume'] * prices_df['price_change']
+            
+            # 4. Filter for the requested period (last N days)
+            # Find the max date in the DB
+            max_date = prices_df['date'].max()
+            start_cutoff = max_date - pd.Timedelta(days=days-1) # Inclusive of max_date
+            
+            period_df = prices_df[prices_df['date'] >= start_cutoff].copy()
+            
+            # 5. Merge Industry
+            merged = period_df.merge(tickers_df, left_on='symbol', right_on='ticker')
+            
+            # 6. Aggregations
+            # Group by Industry
+            grouped = merged.groupby('industry').agg({
+                'net_flow': 'sum',
+                'volume': 'sum',
+                'pct_change': 'mean' # Average movement of stocks in industry
+            }).reset_index()
+            
+            # Sort by absolute flow magnitude or net flow? Let's sort by Net Flow descending
+            grouped = grouped.sort_values('net_flow', ascending=False)
+            
+            # Format results
+            result = []
+            for _, row in grouped.iterrows():
+                result.append({
+                    "industry": row['industry'],
+                    "net_flow": float(row['net_flow']),
+                    "total_volume": int(row['volume']),
+                    "avg_pct_change": float(row['pct_change']) if pd.notna(row['pct_change']) else 0.0
+                })
+                
+            return {
+                "period_days": days,
+                "end_date": str(max_date.date()) if pd.notna(max_date) else None,
+                "items": result
+            }
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)

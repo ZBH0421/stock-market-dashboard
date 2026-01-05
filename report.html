@@ -170,6 +170,43 @@
                 </div>
             </div>
         </div>
+
+        <!-- NEW: Sector Money Flow Section -->
+        <div class="row mb-5">
+            <div class="col-12">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <div>
+                                <h4 class="fw-bold mb-1">Sector Money Flow Analysis</h4>
+                                <div class="text-secondary small">Estimated Net Dollar Volume (Last 5 Days)</div>
+                            </div>
+                            <select id="flowTfSelector" class="form-select form-select-sm" style="width: 150px;">
+                                <option value="1">1 Day</option>
+                                <option value="3">3 Days</option>
+                                <option value="5" selected>5 Days</option>
+                                <option value="10">10 Days</option>
+                            </select>
+                        </div>
+
+                        <div class="row">
+                            <!-- Left: Diverging Bar Chart (Inflow vs Outflow) -->
+                            <div class="col-lg-6 mb-4 mb-lg-0 border-end">
+                                <h6 class="fw-bold text-center text-secondary mb-3">Capital Inflow vs Outflow</h6>
+                                <div id="flowBarChart" style="min-height: 400px;"></div>
+                            </div>
+
+                            <!-- Right: Momentum Scatter (Performance vs Flow) -->
+                            <div class="col-lg-6">
+                                <h6 class="fw-bold text-center text-secondary mb-3">Momentum Map (Performance vs Flow)
+                                </h6>
+                                <div id="flowScatterChart" style="min-height: 400px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Hidden Tooltip for Sparklines -->
@@ -219,6 +256,109 @@
             } finally {
                 $('#loadingOverlay').fadeOut(300);
             }
+        }
+
+        // 1b. FETCH FLOW DATA
+        async function fetchFlowData() {
+            const days = $('#flowTfSelector').val() || 5;
+            const url = `http://127.0.0.1:8000/api/market-flow?days=${days}`;
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) return; // Silent fail if endpoint not ready
+                const data = await response.json();
+                renderFlowCharts(data.items);
+            } catch (e) {
+                console.error("Flow API Error:", e);
+            }
+        }
+
+        function renderFlowCharts(items) {
+            if (!items || items.length === 0) return;
+
+            // 1. Bar Chart Data
+            // Sort by flow descending
+            items.sort((a, b) => b.net_flow - a.net_flow);
+
+            const categories = items.map(i => i.industry);
+            const flowValues = items.map(i => i.net_flow);
+
+            // Colors: Green for Inflow, Red for Outflow
+            const colors = items.map(i => i.net_flow >= 0 ? '#10b981' : '#ef4444');
+
+            const barOptions = {
+                series: [{ name: 'Net Flow', data: flowValues }],
+                chart: { type: 'bar', height: 400, toolbar: { show: false } },
+                plotOptions: {
+                    bar: {
+                        horizontal: true,
+                        barHeight: '70%',
+                        colors: {
+                            ranges: [{ from: -1000000000000, to: 0, color: '#ef4444' },
+                            { from: 0, to: 1000000000000, color: '#10b981' }]
+                        }
+                    }
+                },
+                colors: ['#2563eb'], // Overridden by ranges
+                dataLabels: {
+                    enabled: true,
+                    textAnchor: 'start',
+                    style: { colors: ['#fff'] },
+                    formatter: function (val, opt) {
+                        return fmtMoney(val);
+                    },
+                    offsetX: 0,
+                },
+                xaxis: {
+                    labels: { formatter: (val) => fmtMoney(val) }
+                },
+                tooltip: { y: { formatter: (val) => fmtMoney(val) } },
+                yaxis: { labels: { style: { fontSize: '12px', fontWeight: 600 } } }
+            };
+
+            document.querySelector("#flowBarChart").innerHTML = "";
+            new ApexCharts(document.querySelector("#flowBarChart"), barOptions).render();
+
+            // 2. Scatter Data (Flow vs Pct Change)
+            // { x: PctChange, y: NetFlow, z: Log(TotalVolume) for bubble size }
+            const scatterData = items.map(i => ({
+                x: parseFloat(i.avg_pct_change.toFixed(2)),
+                y: i.net_flow,
+                z: i.total_volume, // Bubble size
+                name: i.industry
+            }));
+
+            const scatterOptions = {
+                series: [{ name: 'Industries', data: scatterData }],
+                chart: { type: 'bubble', height: 400, toolbar: { show: false } },
+                dataLabels: { enabled: false },
+                fill: { opacity: 0.8 },
+                title: { text: '' },
+                xaxis: {
+                    title: { text: 'Avg Performance (%)' },
+                    tickAmount: 10,
+                    labels: { formatter: (val) => val.toFixed(1) + '%' }
+                },
+                yaxis: {
+                    title: { text: 'Net Dollars In/Out' },
+                    labels: { formatter: (val) => fmtMoney(val) }
+                },
+                theme: { palette: 'palette1' },
+                tooltip: {
+                    custom: function ({ series, seriesIndex, dataPointIndex, w }) {
+                        const d = w.config.series[seriesIndex].data[dataPointIndex];
+                        return `<div class="p-2 border bg-white small">
+                                    <div class="fw-bold">${d.name}</div>
+                                    <div>Perf: ${d.x}%</div>
+                                    <div>Flow: ${fmtMoney(d.y)}</div>
+                                    <div>Vol: ${fmtNum(d.z)}</div>
+                                </div>`;
+                    }
+                }
+            };
+
+            document.querySelector("#flowScatterChart").innerHTML = "";
+            new ApexCharts(document.querySelector("#flowScatterChart"), scatterOptions).render();
         }
 
         // 2. RENDER PAGE
@@ -348,8 +488,16 @@
             renderTable(); // Re-render table with new timeframe
         });
 
+        $('#flowTfSelector').on('change', function () {
+            fetchFlowData();
+        });
+
         // INIT
-        $(document).ready(fetchData);
+        // INIT
+        $(document).ready(function () {
+            fetchData();
+            fetchFlowData();
+        });
 
         // UTILS
         function fmtMoney(val) {
