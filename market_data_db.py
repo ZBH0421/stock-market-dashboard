@@ -33,13 +33,20 @@ class MarketDataDB:
         db_url = f"postgresql+psycopg2://{config['DB_USER']}:{config['DB_PASSWORD']}@{config['DB_HOST']}:{config['DB_PORT']}/{config['DB_NAME']}?sslmode=require"
         
         # Create Engine
-        # pool_size=10, max_overflow=20 for handling concurrent writes if needed
-        self.engine = create_engine(
-            db_url, 
-            pool_size=10, 
-            max_overflow=20,
-            pool_pre_ping=True # Auto-reconnect if connection drops
-        )
+        # Optimize for Supabase Transaction Mode (Port 6543)
+        connect_args = {}
+        pool_config = {
+            "pool_pre_ping": True,
+            "pool_size": 10,
+            "max_overflow": 20
+        }
+        
+        if config['DB_PORT'] == '6543':
+            print("[DB] Detected Supabase Transaction Mode (6543). Disabling client-side pooling.")
+            from sqlalchemy.pool import NullPool
+            pool_config = {"poolclass": NullPool}
+            
+        self.engine = create_engine(db_url, **pool_config)
         
         # Schema Definition (Core)
         self.metadata = MetaData()
@@ -87,16 +94,17 @@ class MarketDataDB:
         self.metadata.create_all(self.engine)
 
         # --- Migration: Ensure columns exist ---
-        with self.engine.begin() as conn:
-            conn.execute(text("ALTER TABLE tickers ADD COLUMN IF NOT EXISTS market_cap BIGINT"))
-            conn.execute(text("ALTER TABLE tickers ADD COLUMN IF NOT EXISTS revenue BIGINT"))
-            conn.execute(text("ALTER TABLE tickers ADD COLUMN IF NOT EXISTS gross_profit BIGINT"))
-            conn.execute(text("ALTER TABLE tickers ADD COLUMN IF NOT EXISTS net_income BIGINT"))
-            conn.execute(text("ALTER TABLE tickers ADD COLUMN IF NOT EXISTS pe_ratio FLOAT"))
-            conn.execute(text("ALTER TABLE tickers ADD COLUMN IF NOT EXISTS profit_margin FLOAT"))
-            conn.execute(text("ALTER TABLE tickers ADD COLUMN IF NOT EXISTS dividend_yield FLOAT"))
+        # Note: Commented out to prevent locking issues if another script is updating
+        # with self.engine.begin() as conn:
+        #     conn.execute(text("ALTER TABLE tickers ADD COLUMN IF NOT EXISTS market_cap BIGINT"))
+        #     conn.execute(text("ALTER TABLE tickers ADD COLUMN IF NOT EXISTS revenue BIGINT"))
+        #     conn.execute(text("ALTER TABLE tickers ADD COLUMN IF NOT EXISTS gross_profit BIGINT"))
+        #     conn.execute(text("ALTER TABLE tickers ADD COLUMN IF NOT EXISTS net_income BIGINT"))
+        #     conn.execute(text("ALTER TABLE tickers ADD COLUMN IF NOT EXISTS pe_ratio FLOAT"))
+        #     conn.execute(text("ALTER TABLE tickers ADD COLUMN IF NOT EXISTS profit_margin FLOAT"))
+        #     conn.execute(text("ALTER TABLE tickers ADD COLUMN IF NOT EXISTS dividend_yield FLOAT"))
             # New Migration for Prices
-            conn.execute(text("ALTER TABLE us_daily_prices ADD COLUMN IF NOT EXISTS market_cap BIGINT"))
+            # conn.execute(text("ALTER TABLE us_daily_prices ADD COLUMN IF NOT EXISTS market_cap BIGINT"))
 
         print("[DB] Initialized MarketDataDB and verified schema (Industries -> Tickers -> Prices [w/ MCap]).")
 

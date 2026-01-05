@@ -264,5 +264,99 @@ def get_market_flow(days: int = 5):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/galaxy")
+def get_galaxy_data():
+    """
+    Fetches bulk data for the 3D Galaxy visualization.
+    Returns: List of {symbol, industry, pe, revenue, market_cap, performance_1y}
+    """
+    print(f"--- [CHECKPOINT] /api/galaxy CALLED at {pd.Timestamp.now()} ---")
+    try:
+        print("--- [CHECKPOINT] Connecting to Database... ---")
+        with db.engine.connect() as conn:
+            print("--- [CHECKPOINT] DB Connected. Executing Fundamentals Query... ---")
+            # 1. Fetch Fundamental Data (PE, Rev, Cap) from Tickers table
+            # We filter outstocks with no Market Cap or unreasonable values to keep the chart clean
+            query_fundamentals = text("""
+                SELECT t.ticker, t.company_name, i.name as industry, 
+                       t.pe_ratio, t.revenue, t.market_cap
+                FROM tickers t
+                JOIN industries i ON t.industry_id = i.id
+                WHERE t.market_cap IS NOT NULL 
+                  AND t.market_cap > 0
+            """)
+            funds_df = pd.read_sql(query_fundamentals, conn)
+            
+            if funds_df.empty:
+                 return {"timestamp": str(pd.Timestamp.now()), "count": 0, "stars": []}
+
+            # 2. Approximate 12M Performance (Optional, but adds nice 'Size' dimension)
+            # To be fast, we only get 'Current Close' and 'Close 1 Year Ago'
+            # Using a simplified approach: Get latest price vs price 365 days ago
+            
+            # Subquery to get latest date and date ~1 year ago
+            # For speed in prototype, we might skip precise 12M perf if it's too heavy.
+            # Let's try to get it.
+            
+            perf_query = text("""
+                WITH latest_prices AS (
+                    SELECT symbol, close as price_now 
+                    FROM us_daily_prices 
+                    WHERE date = (SELECT MAX(date) FROM us_daily_prices)
+                ),
+                old_prices AS (
+                    SELECT symbol, close as price_old
+                    FROM us_daily_prices 
+                    WHERE date >= (CURRENT_DATE - INTERVAL '370 days') 
+                      AND date <= (CURRENT_DATE - INTERVAL '360 days')
+                )
+                -- We deduplicate old_prices to get just one entry per symbol (the first one found in range)
+                SELECT l.symbol, l.price_now, 
+                       (SELECT price_old FROM old_prices o WHERE o.symbol = l.symbol LIMIT 1) as price_old
+                FROM latest_prices l
+            """)
+            
+            perf_df = pd.read_sql(perf_query, conn)
+            
+            # Calculate % Change
+            perf_df['change_1y'] = ((perf_df['price_now'] - perf_df['price_old']) / perf_df['price_old']) * 100
+            
+            # 3. Merge
+            merged = funds_df.merge(perf_df[['symbol', 'change_1y']], left_on='ticker', right_on='symbol', how='left')
+            
+            # Fill NaN
+            merged['change_1y'] = merged['change_1y'].fillna(0)
+            merged['pe_ratio'] = merged['pe_ratio'].fillna(0)
+            merged['revenue'] = merged['revenue'].fillna(0)
+            
+            # Data Cleaning for Plotly
+            # Replace Infinity or super huge PE
+            merged = merged[merged['pe_ratio'] < 500] # Remove outliers for better viz
+            merged = merged[merged['pe_ratio'] > -500] 
+
+            stars = []
+            for _, row in merged.iterrows():
+                stars.append({
+                    "symbol": row['ticker'],
+                    "industry": row['industry'],
+                    "company": row['company_name'],
+                    "x_pe": float(row['pe_ratio']),
+                    "y_rev": float(row['revenue']),
+                    "z_cap": float(row['market_cap']),
+                    "color_group": row['industry'], # For Plotly categorization
+                    "size_perf": float(row['change_1y'])
+                })
+                
+            return {
+                "timestamp": str(pd.Timestamp.now()),
+                "count": len(stars),
+                "stars": stars
+            }
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Market Galaxy 3D - Antigravity</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            color: #fff;
+            font-family: 'Outfit', sans-serif;
+            overflow: hidden;
+        }
+
+        #plot {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            pointer-events: none;
+            /* Let clicks pass through to chart */
+        }
+
+        .glass-panel {
+            background: rgba(20, 20, 20, 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 16px;
+            pointer-events: auto;
+            max-width: 300px;
+        }
+
+        h1 {
+            margin: 0;
+            font-weight: 800;
+            font-size: 2rem;
+            background: linear-gradient(45deg, #00f260, #0575e6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        p {
+            color: #aaa;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+
+        .btn-back {
+            display: inline-block;
+            margin-top: 15px;
+            text-decoration: none;
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            transition: all 0.3s;
+        }
+
+        .btn-back:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        #loading {
+            position: absolute;
+            top: 15%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.2rem;
+            color: #0575e6;
+            font-weight: bold;
+            pointer-events: none;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #333;
+            max-width: 80vw;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+    </style>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="config.js"></script>
+</head>
+
+<body>
+
+    <div id="ui-layer">
+        <div class="glass-panel">
+            <h1>Market Galaxy</h1>
+            <p>Explore the market universe in 3D.</p>
+            <ul style="font-size:0.8rem; color:#888; padding-left:20px; margin-bottom:0;">
+                <li><b>X-Axis:</b> P/E Ratio</li>
+                <li><b>Y-Axis:</b> Revenue</li>
+                <li><b>Z-Axis:</b> Market Cap</li>
+                <li><b>DEBUG MODE:</b> Linear Scale Enabled</li>
+            </ul>
+            <a href="index.html" class="btn-back">← Back to Dashboard</a>
+        </div>
+    </div>
+
+    <div id="loading">Initialising Warp Drive...</div>
+    <div id="plot"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/galaxy`);
+
+                // --- DEBUG ADDED ---
+                if (!response.ok) {
+                    const txt = await response.text();
+                    throw new Error(`API Error ${response.status}: ${txt}`);
+                }
+
+                const data = await response.json();
+
+                // Debug: Check structural integrity
+                if (!data || !data.stars) {
+                    throw new Error("Invalid Data Structure: " + JSON.stringify(data).substring(0, 200));
+                }
+
+                if (data.count === 0) {
+                    document.getElementById('plot').innerHTML = '<div style="color:white; text-align:center; padding-top:40vh;">No star system data found.</div>';
+                    return;
+                }
+
+                // DEBUG: Show count
+                const loading = document.getElementById('loading');
+                loading.style.display = 'block';
+                loading.innerHTML = `Loaded ${data.count} stars.<br>Rendering...`;
+
+                const stars = data.stars;
+
+                // Group by Industry for coloring
+                // ERROR SOURCE CHECK: stars must be array
+                if (!Array.isArray(stars)) {
+                    throw new Error("'stars' is not an array");
+                }
+
+                const industries = [...new Set(stars.map(s => s.industry))];
+                const traces = [];
+
+                industries.forEach(ind => {
+                    const group = stars.filter(s => s.industry === ind);
+
+                    // DEBUG: NO FILTER
+                    const validPoints = group;
+
+                    if (validPoints.length === 0) return;
+
+                    traces.push({
+                        name: ind,
+                        x: validPoints.map(s => s.x_pe),
+                        y: validPoints.map(s => s.y_rev),
+                        z: validPoints.map(s => s.z_cap),
+                        mode: 'markers',
+                        marker: {
+                            size: 4,
+                            sizemode: 'diameter',
+                            opacity: 0.8,
+                            line: { width: 0 }
+                        },
+                        text: validPoints.map(s => `<b>${s.symbol}</b><br>${s.company}<br>PE: ${s.x_pe.toFixed(1)}`),
+                        type: 'scatter3d',
+                        hoverinfo: 'text'
+                    });
+                });
+
+                const layout = {
+                    paper_bgcolor: '#000',
+                    plot_bgcolor: '#000',
+                    margin: { l: 0, r: 0, b: 0, t: 0 },
+                    showlegend: true,
+                    legend: { font: { color: '#aaa' }, bgcolor: 'rgba(0,0,0,0)' },
+                    scene: {
+                        xaxis: {
+                            title: 'P/E Ratio',
+                            backgroundcolor: '#000', gridcolor: '#333', zerolinecolor: '#555',
+                            showbackground: false, titlefont: { color: '#888' }, tickfont: { color: '#666' }
+                        },
+                        yaxis: {
+                            title: 'Revenue',
+                            backgroundcolor: '#000', gridcolor: '#333', zerolinecolor: '#555',
+                            showbackground: false, titlefont: { color: '#888' }, tickfont: { color: '#666' }
+                        },
+                        zaxis: {
+                            title: 'Market Cap',
+                            backgroundcolor: '#000', gridcolor: '#333', zerolinecolor: '#555',
+                            showbackground: false, titlefont: { color: '#888' }, tickfont: { color: '#666' }
+                        },
+                        camera: {
+                            eye: { x: 1.5, y: 1.5, z: 1.2 }
+                        }
+                    }
+                };
+
+                Plotly.newPlot('plot', traces, layout, { responsive: true })
+                    .then(() => {
+                        document.getElementById('loading').style.display = 'none';
+                        console.log("Chart rendered successfully");
+                    })
+                    .catch(e => {
+                        console.error("Plotly Error:", e);
+                        document.getElementById('loading').innerHTML = "Rendering Failed: " + e.message;
+                    });
+
+            } catch (e) {
+                console.error(e);
+                document.getElementById('loading').innerHTML = "System Failure:<br>" + e.message;
+                document.getElementById('loading').style.color = "#ff4444";
+            }
+        });
+    </script>
+</body>
+
+</html>
