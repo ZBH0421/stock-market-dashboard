@@ -342,6 +342,10 @@ def get_galaxy_data():
             merged = merged[merged['pe_ratio'] < 500] 
             merged = merged[merged['pe_ratio'] > -500] 
 
+            # 4. Filter Performance Anomalies (The "Big Spheres")
+            # Exclude gains > 2000% (20x) to remove penny stock glitches
+            merged = merged[merged['change_1y'] < 2000]
+
             stars = []
             for _, row in merged.iterrows():
                 stars.append({
