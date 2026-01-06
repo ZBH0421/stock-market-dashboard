@@ -330,8 +330,16 @@ def get_galaxy_data():
             merged['revenue'] = merged['revenue'].fillna(0)
             
             # Data Cleaning for Plotly
-            # Replace Infinity or super huge PE
-            merged = merged[merged['pe_ratio'] < 500] # Remove outliers for better viz
+            # 1. Filter out Hyper-Inflation/Non-USD Currencies (Revenue > 1 Trillion)
+            #    Toyota (TM), Honda (HMC), etc report in JPY. Walmart is ~0.6T USD. 
+            #    So >1T is a safe cutoff for now.
+            merged = merged[merged['revenue'] < 1_000_000_000_000] 
+            
+            # 2. Filter out Negative/Zero Revenue (Breaks Log Scale)
+            merged = merged[merged['revenue'] > 0]
+            
+            # 3. Filter PE Outliers
+            merged = merged[merged['pe_ratio'] < 500] 
             merged = merged[merged['pe_ratio'] > -500] 
 
             stars = []

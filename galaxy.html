@@ -73,21 +73,14 @@
 
         #loading {
             position: absolute;
-            top: 15%;
+            top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 1.2rem;
+            font-size: 1.5rem;
             color: #0575e6;
             font-weight: bold;
             pointer-events: none;
             text-align: center;
-            background: rgba(0, 0, 0, 0.8);
-            padding: 20px;
-            border-radius: 10px;
-            border: 1px solid #333;
-            max-width: 80vw;
-            white-space: pre-wrap;
-            word-break: break-all;
         }
     </style>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
@@ -101,62 +94,44 @@
             <h1>Market Galaxy</h1>
             <p>Explore the market universe in 3D.</p>
             <ul style="font-size:0.8rem; color:#888; padding-left:20px; margin-bottom:0;">
-                <li><b>X-Axis:</b> P/E Ratio</li>
-                <li><b>Y-Axis:</b> Revenue</li>
-                <li><b>Z-Axis:</b> Market Cap</li>
-                <li><b>DEBUG MODE:</b> Linear Scale Enabled</li>
+                <li><b>X-Axis:</b> P/E Ratio (Valuation)</li>
+                <li><b>Y-Axis:</b> Revenue (Log Scale)</li>
+                <li><b>Z-Axis:</b> Market Cap (Log Scale)</li>
+                <li><b>Size:</b> 1-Year Performance</li>
             </ul>
             <a href="index.html" class="btn-back">← Back to Dashboard</a>
         </div>
     </div>
 
-    <div id="loading">Initialising Warp Drive...</div>
+    <div id="loading">Initializing Warp Drive...</div>
     <div id="plot"></div>
 
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
             try {
                 const response = await fetch(`${API_BASE_URL}/api/galaxy`);
-
-                // --- DEBUG ADDED ---
-                if (!response.ok) {
-                    const txt = await response.text();
-                    throw new Error(`API Error ${response.status}: ${txt}`);
-                }
+                if (!response.ok) throw new Error("API Connection Failed");
 
                 const data = await response.json();
-
-                // Debug: Check structural integrity
-                if (!data || !data.stars) {
-                    throw new Error("Invalid Data Structure: " + JSON.stringify(data).substring(0, 200));
-                }
 
                 if (data.count === 0) {
                     document.getElementById('plot').innerHTML = '<div style="color:white; text-align:center; padding-top:40vh;">No star system data found.</div>';
                     return;
                 }
 
-                // DEBUG: Show count
-                const loading = document.getElementById('loading');
-                loading.style.display = 'block';
-                loading.innerHTML = `Loaded ${data.count} stars.<br>Rendering...`;
+                document.getElementById('loading').style.display = 'none';
 
                 const stars = data.stars;
 
                 // Group by Industry for coloring
-                // ERROR SOURCE CHECK: stars must be array
-                if (!Array.isArray(stars)) {
-                    throw new Error("'stars' is not an array");
-                }
-
                 const industries = [...new Set(stars.map(s => s.industry))];
                 const traces = [];
 
                 industries.forEach(ind => {
                     const group = stars.filter(s => s.industry === ind);
 
-                    // DEBUG: NO FILTER
-                    const validPoints = group;
+                    // Filter out bad data for log scale (Rev <= 0)
+                    const validPoints = group.filter(s => s.y_rev > 0 && s.z_cap > 0);
 
                     if (validPoints.length === 0) return;
 
@@ -167,12 +142,13 @@
                         z: validPoints.map(s => s.z_cap),
                         mode: 'markers',
                         marker: {
-                            size: 4,
+                            // Size = Performance. Shifted to be positive for radius.
+                            size: validPoints.map(s => Math.max(2, (s.size_perf + 50) / 10)),
                             sizemode: 'diameter',
                             opacity: 0.8,
                             line: { width: 0 }
                         },
-                        text: validPoints.map(s => `<b>${s.symbol}</b><br>${s.company}<br>PE: ${s.x_pe.toFixed(1)}`),
+                        text: validPoints.map(s => `<b>${s.symbol}</b><br>${s.company}<br>PE: ${s.x_pe.toFixed(1)}<br>Rev: $${(s.y_rev / 1e9).toFixed(1)}B<br>Cap: $${(s.z_cap / 1e9).toFixed(1)}B`),
                         type: 'scatter3d',
                         hoverinfo: 'text'
                     });
@@ -188,15 +164,16 @@
                         xaxis: {
                             title: 'P/E Ratio',
                             backgroundcolor: '#000', gridcolor: '#333', zerolinecolor: '#555',
-                            showbackground: false, titlefont: { color: '#888' }, tickfont: { color: '#666' }
+                            showbackground: false, titlefont: { color: '#888' }, tickfont: { color: '#666' },
+                            range: [0, 100] // Clip distinct outliers for better view
                         },
                         yaxis: {
-                            title: 'Revenue',
+                            title: 'Revenue (Log)', type: 'log',
                             backgroundcolor: '#000', gridcolor: '#333', zerolinecolor: '#555',
                             showbackground: false, titlefont: { color: '#888' }, tickfont: { color: '#666' }
                         },
                         zaxis: {
-                            title: 'Market Cap',
+                            title: 'Market Cap (Log)', type: 'log',
                             backgroundcolor: '#000', gridcolor: '#333', zerolinecolor: '#555',
                             showbackground: false, titlefont: { color: '#888' }, tickfont: { color: '#666' }
                         },
@@ -206,20 +183,11 @@
                     }
                 };
 
-                Plotly.newPlot('plot', traces, layout, { responsive: true })
-                    .then(() => {
-                        document.getElementById('loading').style.display = 'none';
-                        console.log("Chart rendered successfully");
-                    })
-                    .catch(e => {
-                        console.error("Plotly Error:", e);
-                        document.getElementById('loading').innerHTML = "Rendering Failed: " + e.message;
-                    });
+                Plotly.newPlot('plot', traces, layout, { responsive: true });
 
             } catch (e) {
                 console.error(e);
                 document.getElementById('loading').innerHTML = "System Failure:<br>" + e.message;
-                document.getElementById('loading').style.color = "#ff4444";
             }
         });
     </script>
