@@ -264,6 +264,107 @@ def get_market_flow(days: int = 5):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.get("/api/stock/{ticker}")
+def get_stock_details(ticker: str):
+    """
+    Fetches detailed information for a specific stock.
+    Includes: Fundamentals, Price History, and News (via YFinance).
+    """
+    try:
+        ticker = ticker.upper()
+        
+        # 1. Fetch from Database
+        with db.engine.connect() as conn:
+            # Fundamentals
+            t_query = text("""
+                SELECT company_name, market_cap, pe_ratio, revenue, volume, 
+                       gross_profit, net_income, profit_margin, dividend_yield
+                FROM tickers 
+                WHERE ticker = :ticker
+            """)
+            t_res = conn.execute(t_query, {"ticker": ticker}).fetchone()
+            
+            # Price History (Last 2 Years)
+            p_query = text("""
+                SELECT date, close, volume 
+                FROM us_daily_prices 
+                WHERE symbol = :ticker 
+                AND date >= CURRENT_DATE - INTERVAL '730 days'
+                ORDER BY date ASC
+            """)
+            p_df = pd.read_sql(p_query, conn, params={"ticker": ticker})
+            
+        if not t_res and p_df.empty:
+            raise HTTPException(status_code=404, detail="Stock not found")
+            
+        # 2. Fetch News (Live from Yahoo Finance)
+        news_items = []
+        try:
+            import yfinance as yf
+            bot = yf.Ticker(ticker)
+            raw_news = bot.news
+            for n in raw_news:
+                # Different YF versions have different keys, handle gracefully
+                news_items.append({
+                    "title": n.get('title'),
+                    "link": n.get('link'),
+                    "publisher": n.get('publisher'),
+                    "date": n.get('providerPublishTime') # Timestamp
+                })
+        except Exception as e:
+            print(f"[Warning] Failed to fetch news for {ticker}: {e}")
+            
+        # 3. Assemble Response
+        
+        # Calculate latest price and change
+        latest_price = None
+        change_1d = None
+        change_pct = None
+        
+        history = []
+        if not p_df.empty:
+            p_df['date_str'] = p_df['date'].astype(str)
+            history = p_df[['date_str', 'close', 'volume']].to_dict(orient='records')
+            history = [{"x": r['date_str'], "y": r['close'], "v": r['volume']} for r in history]
+            
+            latest_row = p_df.iloc[-1]
+            latest_price = float(latest_row['close'])
+            
+            if len(p_df) > 1:
+                prev_row = p_df.iloc[-2]
+                change_1d = latest_price - float(prev_row['close'])
+                change_pct = (change_1d / float(prev_row['close'])) * 100
+
+        info = {
+            "symbol": ticker,
+            "company": t_res[0] if t_res else ticker,
+            "price": latest_price,
+            "change": change_1d,
+            "change_percent": change_pct,
+            "market_cap": t_res[1] if t_res else None,
+            "pe_ratio": t_res[2] if t_res else None,
+            "revenue": t_res[3] if t_res else None,
+            "volume": latest_row['volume'] if not p_df.empty else None, # Prefer latest daily volume
+            "gross_profit": t_res[5] if t_res else None,
+            "net_income": t_res[6] if t_res else None,
+            "profit_margin": t_res[7] if t_res else None,
+            "dividend_yield": t_res[8] if t_res else None
+        }
+
+        return {
+            "info": info,
+            "history": history,
+            "news": news_items
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/galaxy")
 def get_galaxy_data():
     """

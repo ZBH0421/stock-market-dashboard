@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Details</title>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap"
+        rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            /* Light Theme (Default) */
+            --bg-body: #f8fafc;
+            --bg-card: #ffffff;
+            --bg-header: #ffffff;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+            --accent-blue: #3b82f6;
+
+            --pos-bg: #dcfce7;
+            --pos-text: #166534;
+            --neg-bg: #fee2e2;
+            --neg-text: #991b1b;
+            --neu-bg: #f1f5f9;
+            --neu-text: #475569;
+        }
+
+        [data-theme="dark"] {
+            /* Dark Theme */
+            --bg-body: #0f172a;
+            --bg-card: #1e293b;
+            --bg-header: #1e293b;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --border-color: #334155;
+            --accent-blue: #60a5fa;
+
+            --pos-bg: rgba(22, 163, 74, 0.2);
+            --pos-text: #4ade80;
+            --neg-bg: rgba(220, 38, 38, 0.2);
+            --neg-text: #f87171;
+            --neu-bg: rgba(71, 85, 105, 0.3);
+            --neu-text: #cbd5e1;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-primary);
+            padding-bottom: 60px;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        .dashboard-card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            transition: background 0.3s ease, border-color 0.3s ease;
+        }
+
+        .hero-section {
+            padding: 2rem 0;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-header);
+            margin-bottom: 2rem;
+        }
+
+        .stock-price {
+            font-size: 2.5rem;
+            font-weight: 800;
+            letter-spacing: -1px;
+        }
+
+        .price-change {
+            font-size: 1.2rem;
+            font-weight: 600;
+            padding: 4px 12px;
+            border-radius: 8px;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .news-item {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            transition: background 0.2s;
+        }
+
+        .news-item:last-child {
+            border-bottom: none;
+        }
+
+        .news-item:hover {
+            background-color: var(--neu-bg);
+            border-radius: 8px;
+        }
+
+        .news-title {
+            font-weight: 600;
+            color: var(--text-primary);
+            text-decoration: none;
+            display: block;
+            margin-bottom: 0.25rem;
+        }
+
+        .news-meta {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        /* --- THEME TOGGLE BUTTON --- */
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            z-index: 1050;
+        }
+
+        .theme-toggle:hover {
+            transform: rotate(15deg);
+            background: var(--border-color);
+        }
+
+        .col-green {
+            color: var(--pos-text);
+        }
+
+        .col-red {
+            color: var(--neg-text);
+        }
+
+        .bg-green {
+            background-color: var(--pos-bg);
+            color: var(--pos-text);
+        }
+
+        .bg-red {
+            background-color: var(--neg-bg);
+            color: var(--neg-text);
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Theme Toggle -->
+    <button class="theme-toggle" id="themeToggle" title="Toggle Dark/Light Mode">
+        <svg id="iconSun" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
+            class="bi bi-sun-fill" viewBox="0 0 16 16" style="display:none;">
+            <path
+                d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0zm0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13zM2.343 2.343a.5.5 0 0 1 .707 0l1.414 1.414a.5.5 0 1 1-.707.707L2.343 3.05a.5.5 0 0 1 0-.707zm11.314 8.486a.5.5 0 0 1 0 .707l-1.414 1.414a.5.5 0 1 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0zM1.293 7.5a.5.5 0 0 1-.5.5h2a.5.5 0 0 1 0-1h-2a.5.5 0 0 1 .5.5zm10 0a.5.5 0 0 1 .5.5h2a.5.5 0 0 1 0-1h-2a.5.5 0 0 1 .5.5zM3.5 4.5a.5.5 0 0 1 .707 0l1.414 1.414a.5.5 0 1 1-.707.707L3.5 5.207a.5.5 0 0 1 0-.707zm8.486 8.486a.5.5 0 0 1 .707 0l1.414 1.414a.5.5 0 1 1-.707.707l-1.414-1.414a.5.5 0 0 1 0-.707z" />
+        </svg>
+        <svg id="iconMoon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
+            class="bi bi-moon-fill" viewBox="0 0 16 16">
+            <path
+                d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z" />
+        </svg>
+    </button>
+
+    <div class="hero-section">
+        <div class="container">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <a href="index.html" class="btn btn-outline-secondary btn-sm">&larr; Dashboard</a>
+            </div>
+            <div class="row align-items-end">
+                <div class="col-md-8">
+                    <h1 class="display-4 fw-bold mb-0" id="stockSymbol">Loading...</h1>
+                    <p class="h4 text-secondary fw-normal mb-3" id="companyName">-</p>
+                    <div class="d-flex align-items-center">
+                        <span class="stock-price" id="stockPrice">-</span>
+                        <span class="price-change" id="priceChange">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container pb-5">
+        <div class="row g-4">
+            <!-- Left Column: Chart -->
+            <div class="col-lg-8">
+                <div class="dashboard-card">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="fw-bold mb-0">Price History (2 Years)</h5>
+                    </div>
+                    <div id="mainChart" style="min-height: 400px;"></div>
+                </div>
+
+                <div class="dashboard-card">
+                    <h5 class="fw-bold mb-3">Latest News</h5>
+                    <div id="newsFeed">
+                        <div class="text-center py-4 text-secondary">Loading news...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Stats -->
+            <div class="col-lg-4">
+                <div class="dashboard-card">
+                    <h5 class="fw-bold mb-4">Key Statistics</h5>
+
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <div class="stat-label">Market Cap</div>
+                            <div class="stat-value" id="valMcap">-</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="stat-label">P/E Ratio</div>
+                            <div class="stat-value" id="valPe">-</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="stat-label">Volume</div>
+                            <div class="stat-value" id="valVol">-</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="stat-label">Revenue</div>
+                            <div class="stat-value" id="valRev">-</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="stat-label">Gross Profit</div>
+                            <div class="stat-value" id="valGp">-</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="stat-label">Net Income</div>
+                            <div class="stat-value" id="valNi">-</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="stat-label">Profit Margin</div>
+                            <div class="stat-value" id="valPm">-</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="stat-label">Div Yield</div>
+                            <div class="stat-value" id="valDiv">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script src="config.js"></script>
+
+    <script>
+        // --- Theme Logic ---
+        const toggleBtn = document.getElementById('themeToggle');
+        const sunIcon = document.getElementById('iconSun');
+        const moonIcon = document.getElementById('iconMoon');
+        const root = document.documentElement;
+
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'dark') enableDarkMode();
+
+        toggleBtn.addEventListener('click', () => {
+            if (root.getAttribute('data-theme') === 'dark') enableLightMode();
+            else enableDarkMode();
+        });
+
+        function enableLightMode() {
+            root.removeAttribute('data-theme');
+            localStorage.setItem('theme', 'light');
+            sunIcon.style.display = 'none';
+            moonIcon.style.display = 'block';
+            updateChartTheme('light');
+        }
+
+        function enableDarkMode() {
+            root.setAttribute('data-theme', 'dark');
+            localStorage.setItem('theme', 'dark');
+            sunIcon.style.display = 'block';
+            moonIcon.style.display = 'none';
+            updateChartTheme('dark');
+        }
+
+        function updateChartTheme(theme) {
+            if (window.mainChart) {
+                window.mainChart.updateOptions({
+                    theme: { mode: theme },
+                    chart: { background: 'transparent' },
+                    xaxis: { labels: { style: { colors: theme === 'dark' ? '#94a3b8' : '#64748b' } } },
+                    yaxis: { labels: { style: { colors: theme === 'dark' ? '#94a3b8' : '#64748b' } } }
+                });
+            }
+        }
+
+        // --- Data Logic ---
+        const urlParams = new URLSearchParams(window.location.search);
+        const ticker = urlParams.get('ticker');
+        window.mainChart = null;
+
+        if (!ticker) {
+            alert("No ticker specified!");
+            window.location.href = 'index.html';
+        } else {
+            loadStockData(ticker);
+        }
+
+        async function loadStockData(symbol) {
+            try {
+                // Fetch from new Endpoint
+                const res = await fetch(`${API_BASE_URL}/api/stock/${symbol}`);
+                if (!res.ok) throw new Error('Stock not found');
+                const data = await res.json();
+
+                renderHeader(data.info);
+                renderStats(data.info);
+                renderChart(data.history, data.info);
+                renderNews(data.news);
+
+            } catch (err) {
+                console.error(err);
+                $('#stockSymbol').text("Error");
+                $('#companyName').text("Could not load data for " + symbol);
+            }
+        }
+
+        function renderHeader(info) {
+            $('#stockSymbol').text(info.symbol);
+            $('#companyName').text(info.company);
+
+            if (info.price) {
+                $('#stockPrice').text('$' + info.price.toFixed(2));
+                const chg = info.change;
+                const pct = info.change_percent;
+                const sign = chg >= 0 ? '+' : '';
+                const cls = chg >= 0 ? 'bg-green' : 'bg-red';
+
+                $('#priceChange')
+                    .text(`${sign}${chg.toFixed(2)} (${sign}${pct.toFixed(2)}%)`)
+                    .removeClass('bg-green bg-red').addClass(cls);
+            }
+        }
+
+        function renderStats(info) {
+            // Helpers
+            const billions = v => v ? '$' + (v / 1e9).toFixed(2) + 'B' : '-';
+            const millions = v => v ? (v / 1e6).toFixed(1) + 'M' : '-';
+            const num = v => v ? v.toFixed(2) : '-';
+            const pct = v => v ? (v * 100).toFixed(2) + '%' : '-'; // Assuming decimal in DB? No, usually raw matches yfinance
+            // Actually check if margins are 0.15 or 15.0. Assuming raw values for now.
+
+            $('#valMcap').text(billions(info.market_cap));
+            $('#valPe').text(num(info.pe_ratio));
+            $('#valRev').text(billions(info.revenue));
+            $('#valVol').text(millions(info.volume));
+            $('#valGp').text(billions(info.gross_profit));
+            $('#valNi').text(billions(info.net_income));
+            $('#valPm').text(info.profit_margin ? (info.profit_margin * 100).toFixed(1) + '%' : '-');
+            $('#valDiv').text(info.dividend_yield ? (info.dividend_yield * 100).toFixed(2) + '%' : '-');
+        }
+
+        function renderChart(history, info) {
+            if (!history || history.length === 0) {
+                $('#mainChart').html('<div class="text-center py-5">No Price History Available</div>');
+                return;
+            }
+
+            const dataPoints = history.map(h => ({ x: h.x, y: h.y }));
+            const isDark = root.getAttribute('data-theme') === 'dark';
+            const color = (info.change && info.change < 0) ? '#f87171' : '#4ade80';
+
+            var options = {
+                series: [{ name: 'Price', data: dataPoints }],
+                chart: {
+                    type: 'area',
+                    height: 400,
+                    background: 'transparent',
+                    zoom: { enabled: true, type: 'x', autoScaleYaxis: true }
+                },
+                theme: { mode: isDark ? 'dark' : 'light' },
+                stroke: { curve: 'smooth', width: 2 },
+                fill: {
+                    type: 'gradient',
+                    gradient: {
+                        shadeIntensity: 1,
+                        opacityFrom: 0.7,
+                        opacityTo: 0.1,
+                        stops: [0, 90, 100]
+                    }
+                },
+                colors: [color],
+                dataLabels: { enabled: false },
+                xaxis: {
+                    type: 'datetime',
+                    labels: { style: { colors: isDark ? '#94a3b8' : '#64748b' } }
+                },
+                yaxis: {
+                    labels: {
+                        formatter: (val) => '$' + val.toFixed(0),
+                        style: { colors: isDark ? '#94a3b8' : '#64748b' }
+                    }
+                },
+                grid: {
+                    borderColor: isDark ? '#334155' : '#e2e8f0',
+                }
+            };
+
+            window.mainChart = new ApexCharts(document.querySelector("#mainChart"), options);
+            window.mainChart.render();
+        }
+
+        function renderNews(news) {
+            const container = $('#newsFeed');
+            container.empty();
+
+            if (!news || news.length === 0) {
+                container.html('<div class="text-center py-4 text-secondary">No news articles found.</div>');
+                return;
+            }
+
+            news.forEach(n => {
+                const dateStr = n.date ? new Date(n.date * 1000).toLocaleString() : '';
+                const html = `
+                    <div class="news-item">
+                        <a href="${n.link}" target="_blank" class="news-title">${n.title}</a>
+                        <div class="news-meta">
+                            <span class="fw-bold">${n.publisher}</span> · ${dateStr}
+                        </div>
+                    </div>
+                `;
+                container.append(html);
+            });
+        }
+    </script>
+</body>
+
+</html>

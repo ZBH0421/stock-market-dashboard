@@ -578,15 +578,17 @@
                 }
 
                 data.stocks.forEach((s, idx) => {
+
                     const row = `
                         <tr>
                             <td>${idx + 1}</td>
-                            <td><span class="symbol-badge">${s.symbol}</span></td>
+                            <td><a href="stock.html?ticker=${s.symbol}" target="_blank" class="text-decoration-none"><span class="symbol-badge">${s.symbol}</span></a></td>
                             <td class="fw-medium">${s.company}</td>
                             <td>${s.price ? '$' + s.price.toFixed(2) : '-'}</td>
                             <td data-order="${s.market_cap}">$${(s.market_cap / 1e9).toFixed(2)}B</td>
                             <td>${s.pe_ratio ? s.pe_ratio.toFixed(1) : '-'}</td>
                             ${renderPctCell(s.symbol, '1D', s.change_1d)}
+
                             ${renderPctCell(s.symbol, '1M', s.change_1m)}
                             ${renderPctCell(s.symbol, '2M', s.change_2m)}
                             ${renderPctCell(s.symbol, '3M', s.change_3m)}
