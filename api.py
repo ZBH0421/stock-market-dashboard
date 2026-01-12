@@ -278,7 +278,7 @@ def get_stock_details(ticker: str):
         with db.engine.connect() as conn:
             # Fundamentals
             t_query = text("""
-                SELECT company_name, market_cap, pe_ratio, revenue, volume, 
+                SELECT company_name, market_cap, pe_ratio, revenue, 
                        gross_profit, net_income, profit_margin, dividend_yield
                 FROM tickers 
                 WHERE ticker = :ticker
@@ -317,6 +317,15 @@ def get_stock_details(ticker: str):
             
         # 3. Assemble Response
         
+        # Helper to safely cast numpy/pandas types
+        def safe_float(val):
+            if val is None or pd.isna(val): return None
+            return float(val)
+
+        def safe_int(val):
+            if val is None or pd.isna(val): return None
+            return int(val)
+
         # Calculate latest price and change
         latest_price = None
         change_1d = None
@@ -325,16 +334,18 @@ def get_stock_details(ticker: str):
         history = []
         if not p_df.empty:
             p_df['date_str'] = p_df['date'].astype(str)
-            history = p_df[['date_str', 'close', 'volume']].to_dict(orient='records')
-            history = [{"x": r['date_str'], "y": r['close'], "v": r['volume']} for r in history]
+            # Convert to list of dicts first to avoid numpy types in iteration if possible, 
+            # but manually building is safer for serialization
+            hist_records = p_df[['date_str', 'close', 'volume']].to_dict(orient='records')
+            history = [{"x": r['date_str'], "y": safe_float(r['close']), "v": safe_int(r['volume'])} for r in hist_records]
             
             latest_row = p_df.iloc[-1]
-            latest_price = float(latest_row['close'])
+            latest_price = safe_float(latest_row['close'])
             
             if len(p_df) > 1:
                 prev_row = p_df.iloc[-2]
-                change_1d = latest_price - float(prev_row['close'])
-                change_pct = (change_1d / float(prev_row['close'])) * 100
+                change_1d = latest_price - safe_float(prev_row['close'])
+                change_pct = (change_1d / safe_float(prev_row['close'])) * 100
 
         info = {
             "symbol": ticker,
@@ -342,14 +353,14 @@ def get_stock_details(ticker: str):
             "price": latest_price,
             "change": change_1d,
             "change_percent": change_pct,
-            "market_cap": t_res[1] if t_res else None,
-            "pe_ratio": t_res[2] if t_res else None,
-            "revenue": t_res[3] if t_res else None,
-            "volume": latest_row['volume'] if not p_df.empty else None, # Prefer latest daily volume
-            "gross_profit": t_res[5] if t_res else None,
-            "net_income": t_res[6] if t_res else None,
-            "profit_margin": t_res[7] if t_res else None,
-            "dividend_yield": t_res[8] if t_res else None
+            "market_cap": safe_int(t_res[1]) if t_res else None,
+            "pe_ratio": safe_float(t_res[2]) if t_res else None,
+            "revenue": safe_int(t_res[3]) if t_res else None,
+            "volume": safe_int(latest_row['volume']) if not p_df.empty else None, 
+            "gross_profit": safe_int(t_res[4]) if t_res else None,
+            "net_income": safe_int(t_res[5]) if t_res else None,
+            "profit_margin": safe_float(t_res[6]) if t_res else None,
+            "dividend_yield": safe_float(t_res[7]) if t_res else None
         }
 
         return {
