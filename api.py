@@ -300,20 +300,20 @@ def get_stock_details(ticker: str):
             
         # 2. Fetch News (Live from Yahoo Finance)
         news_items = []
-        try:
-            import yfinance as yf
-            bot = yf.Ticker(ticker)
-            raw_news = bot.news
-            for n in raw_news:
-                # Different YF versions have different keys, handle gracefully
-                news_items.append({
-                    "title": n.get('title'),
-                    "link": n.get('link'),
-                    "publisher": n.get('publisher'),
-                    "date": n.get('providerPublishTime') # Timestamp
-                })
-        except Exception as e:
-            print(f"[Warning] Failed to fetch news for {ticker}: {e}")
+        # try:
+        #     import yfinance as yf
+        #     bot = yf.Ticker(ticker)
+        #     raw_news = bot.news
+        #     for n in raw_news:
+        #         # Different YF versions have different keys, handle gracefully
+        #         news_items.append({
+        #             "title": n.get('title'),
+        #             "link": n.get('link'),
+        #             "publisher": n.get('publisher'),
+        #             "date": n.get('providerPublishTime') # Timestamp
+        #         })
+        # except Exception as e:
+        #     print(f"[Warning] Failed to fetch news for {ticker}: {e}")
             
         # 3. Assemble Response
         
