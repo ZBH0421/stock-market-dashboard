@@ -72,6 +72,7 @@ class MarketDataDB:
             Column('gross_profit', BigInteger),
             Column('net_income', BigInteger),
             Column('pe_ratio', Float),
+            Column('trailing_eps', Float),
             Column('profit_margin', Float),
             Column('dividend_yield', Float),
             Column('created_at', DateTime, server_default=func.now())
@@ -145,6 +146,7 @@ class MarketDataDB:
             if 'gross_profit' in info: values['gross_profit'] = info['gross_profit']
             if 'net_income' in info: values['net_income'] = info['net_income']
             if 'pe_ratio' in info: values['pe_ratio'] = info['pe_ratio']
+            if 'trailing_eps' in info: values['trailing_eps'] = info['trailing_eps']
             if 'profit_margin' in info: values['profit_margin'] = info['profit_margin']
             # if 'dividend_yield' in info: values['dividend_yield'] = info['dividend_yield']
 
@@ -169,6 +171,7 @@ class MarketDataDB:
         if 'gross_profit' in info and info['gross_profit']: values['gross_profit'] = info['gross_profit']
         if 'net_income' in info and info['net_income']: values['net_income'] = info['net_income']
         if 'pe_ratio' in info and info['pe_ratio']: values['pe_ratio'] = info['pe_ratio']
+        if 'trailing_eps' in info and info['trailing_eps']: values['trailing_eps'] = info['trailing_eps']
         if 'profit_margin' in info and info['profit_margin']: values['profit_margin'] = info['profit_margin']
         
         if not values:
