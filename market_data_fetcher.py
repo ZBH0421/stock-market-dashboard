@@ -81,6 +81,18 @@ class MarketDataFetcher:
             print(f"[Fetcher] Error fetching {symbol}: {e}")
             return None
 
+    def is_delisted(self, symbol: str) -> bool:
+        """
+        Quickly checks if a ticker is delisted using fast_info (lightweight call).
+        Returns True if the ticker has no valid last price (i.e., delisted or invalid).
+        """
+        try:
+            fetch_symbol = symbol.replace('.', '-')
+            fast_info = yf.Ticker(fetch_symbol).fast_info
+            return fast_info.get('lastPrice') is None
+        except Exception:
+            return True
+
     def get_ticker_info(self, symbol: str) -> dict:
         """
         Fetches fundamentals for a ticker (Market Cap, Revenue, PE, etc.)
@@ -100,6 +112,7 @@ class MarketDataFetcher:
                 'gross_profit': info.get('grossProfits'),
                 'net_income': info.get('netIncomeToCommon'),
                 'pe_ratio': info.get('trailingPE'),
+                'trailing_eps': info.get('trailingEps'),
                 'profit_margin': info.get('profitMargins'),
                 'shares_outstanding': info.get('sharesOutstanding'),
                 # 'dividend_yield': info.get('dividendYield'), # User requested to exclude this
