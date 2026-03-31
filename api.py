@@ -482,5 +482,59 @@ def get_galaxy_data():
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/sector-pe-history")
+def get_sector_pe_history(days: int = 365):
+    """
+    Returns market-cap-weighted trailing PE per sector per day.
+    Uses stored trailingEps to compute historical PE from daily close prices.
+    Filters: trailing_eps > 0, close > 0, market_cap > 0, pe between 0 and 200.
+    """
+    try:
+        with db.engine.connect() as conn:
+            query = text(f"""
+                SELECT
+                    i.name AS industry,
+                    p.date,
+                    SUM((p.close / t.trailing_eps) * p.market_cap) / SUM(p.market_cap) AS weighted_pe
+                FROM us_daily_prices p
+                JOIN tickers t ON p.symbol = t.ticker
+                JOIN industries i ON t.industry_id = i.id
+                WHERE
+                    t.trailing_eps > 0
+                    AND p.close > 0
+                    AND p.market_cap > 0
+                    AND (p.close / t.trailing_eps) BETWEEN 0 AND 200
+                    AND p.date >= CURRENT_DATE - INTERVAL '{days} days'
+                GROUP BY i.name, p.date
+                ORDER BY i.name, p.date
+            """)
+            rows = conn.execute(query).fetchall()
+
+        if not rows:
+            return {"sectors": []}
+
+        from collections import defaultdict
+        sector_data = defaultdict(list)
+        for row in rows:
+            industry, date, pe = row
+            if pe is not None:
+                sector_data[industry].append({
+                    "date": str(date),
+                    "pe": round(float(pe), 2)
+                })
+
+        sectors = [
+            {"name": name, "data": points}
+            for name, points in sorted(sector_data.items())
+            if len(points) >= 5
+        ]
+
+        return {"sectors": sectors}
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
