@@ -11,6 +11,16 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+PERIOD_MAP = {
+    "1D": 1,
+    "1W": 7,
+    "1M": 30,
+    "3M": 90,
+    "6M": 180,
+    "1Y": 365,
+    "5Y": 1825,
+}
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Market Data API",
