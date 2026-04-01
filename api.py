@@ -546,6 +546,14 @@ def get_sector_pe_history(days: int = 365):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+def _safe_float(v, ndigits):
+    if v is None:
+        return None
+    f = float(v)
+    if not math.isfinite(f):
+        return None
+    return round(f, ndigits)
+
 @app.get("/api/gics-overview")
 def get_gics_overview(period: str = "1D"):
     if period not in PERIOD_MAP:
@@ -611,8 +619,8 @@ def get_gics_overview(period: str = "1D"):
             items.append({
                 "industry": industry,
                 "stock_count": int(stock_count) if stock_count is not None else 0,
-                "pct_change": round(float(pct_change), 4) if pct_change is not None else None,
-                "avg_pe": round(float(avg_pe), 2) if avg_pe is not None else None,
+                "pct_change": _safe_float(pct_change, 4),
+                "avg_pe": _safe_float(avg_pe, 2),
             })
 
         return {"period": period, "items": items}
