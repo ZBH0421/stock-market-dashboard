@@ -21,20 +21,26 @@ class DailyUpdater:
 
     def get_last_update_date(self):
         """
-        Gets the maximum date currently in the database to determine start date.
-        Returns a string 'YYYY-MM-DD'.
+        Gets the start date for the next update run.
+        Uses the date where at least 90% of tickers have coverage,
+        avoiding a partial run pushing MAX() ahead and skipping the rest.
         """
         with self.db.engine.connect() as conn:
-            # Find the latest date across all prices
-            # (In a perfect world we check per ticker, but for daily batch, global max or T-3 is usually safe)
-            result = conn.execute(text("SELECT MAX(date) FROM us_daily_prices")).scalar()
-            
+            total_tickers = conn.execute(text("SELECT COUNT(*) FROM tickers")).scalar() or 1
+            threshold = int(total_tickers * 0.9)
+            # Find the most recent date that has data for at least 90% of tickers
+            result = conn.execute(text("""
+                SELECT MAX(date) FROM (
+                    SELECT date FROM us_daily_prices
+                    GROUP BY date
+                    HAVING COUNT(DISTINCT symbol) >= :threshold
+                ) covered_dates
+            """), {'threshold': threshold}).scalar()
+
             if result:
-                # Start from the NEXT day
                 next_day = result + timedelta(days=1)
                 return next_day.strftime('%Y-%m-%d')
             else:
-                # If DB is empty, default safely
                 return "2024-01-01"
 
     def run(self):
@@ -53,7 +59,7 @@ class DailyUpdater:
         # Strategy: Fetch from (Today - 3 days) to Today. 
         # The DB 'upsert' logic handles duplicates, so slight overlap is cleaner than missing data.
         end_date = datetime.now().strftime('%Y-%m-%d')
-        start_date = (datetime.now() - timedelta(days=5)).strftime('%Y-%m-%d')
+        start_date = self.get_last_update_date()
         
         print(f"Update Range: {start_date} -> {end_date}")
         print("(Fetching last 5 days to ensure no gaps/corrections are missed)")
@@ -62,6 +68,7 @@ class DailyUpdater:
         success_count = 0
         skip_count = 0
         error_count = 0
+        delisted_count = 0
         
         pbar = tqdm(tickers, desc="Updating Prices")
         
@@ -71,7 +78,14 @@ class DailyUpdater:
                 df = self.fetcher.fetch_us_daily_close(ticker, start_date, end_date)
                 
                 if df is None or df.empty:
-                    skip_count += 1
+                    if self.fetcher.is_delisted(ticker):
+                        with self.db.engine.begin() as conn:
+                            conn.execute(text("DELETE FROM us_daily_prices WHERE symbol = :t"), {'t': ticker})
+                            conn.execute(text("DELETE FROM tickers WHERE ticker = :t"), {'t': ticker})
+                        print(f"[Delisted] Removed {ticker} from DB.")
+                        delisted_count += 1
+                    else:
+                        skip_count += 1
                     continue
                 
                 # Transform
@@ -112,6 +126,7 @@ class DailyUpdater:
         print(f"Processed: {len(tickers)}")
         print(f"Success:   {success_count}")
         print(f"Skipped:   {skip_count} (No new data)")
+        print(f"Delisted:  {delisted_count} (Removed from DB)")
         print(f"Errors:    {error_count}")
 
 if __name__ == "__main__":
