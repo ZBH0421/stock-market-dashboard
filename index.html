@@ -196,7 +196,8 @@
     const valid = state.sectorData.filter(s => s.pct_change !== null);
     const sorted = [...valid].sort((a, b) => b.pct_change - a.pct_change);
     const gainers = sorted.slice(0, 3);
-    const losers = [...sorted].reverse().slice(0, 3);
+    const gainerNames = new Set(gainers.map(s => s.name));
+    const losers = [...sorted].reverse().filter(s => !gainerNames.has(s.name)).slice(0, 3);
     const bar = document.getElementById('movers-bar');
     if (!gainers.length && !losers.length) {
       bar.innerHTML = '<span class="text-zinc-600 text-xs">No data</span>';
@@ -319,8 +320,10 @@
   }
 
   function showError() {
+    state.selectedSector = null;
+    document.getElementById('drill-panel').classList.add('hidden');
     document.getElementById('sector-grid').innerHTML = `
-      <div class="col-span-4 py-16 text-center">
+      <div class="col-span-full py-16 text-center">
         <p class="text-zinc-500 text-sm mb-2">Failed to load market data.</p>
         <button onclick="loadData()"
                 class="text-zinc-400 hover:text-zinc-200 text-sm underline underline-offset-2 transition-colors">
