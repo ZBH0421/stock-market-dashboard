@@ -564,11 +564,13 @@ def get_gics_overview(period: str = "1D"):
                     SELECT MAX(date) AS d FROM us_daily_prices
                 ),
                 current_prices AS (
-                    SELECT p.symbol, p.close AS current_close, p.market_cap
-                    FROM us_daily_prices p, end_date
+                    SELECT p.symbol, p.close AS current_close,
+                           COALESCE(NULLIF(p.market_cap, 0), t.market_cap) AS market_cap
+                    FROM us_daily_prices p
+                    JOIN tickers t ON p.symbol = t.ticker, end_date
                     WHERE p.date = end_date.d
                       AND p.close > 0
-                      AND p.market_cap > 0
+                      AND COALESCE(NULLIF(p.market_cap, 0), t.market_cap) > 0
                 ),
                 start_prices AS (
                     SELECT DISTINCT ON (p.symbol)
