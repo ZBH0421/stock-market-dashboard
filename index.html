@@ -41,6 +41,15 @@
   </div>
 
   <script>
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   // ─── GICS Sector Mapping ──────────────────────────────────────────────────
   const GICS_SECTORS = {
     "Information Technology": [
@@ -157,6 +166,7 @@
       document.getElementById('last-updated').textContent =
         'Updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } catch (e) {
+      console.error('[GICS] loadData error:', e);
       showError();
     }
   }
@@ -180,7 +190,7 @@
       pct_change: s.changes.length ? s.changes.reduce((a, b) => a + b, 0) / s.changes.length : null,
       avg_pe: s.pes.length ? s.pes.reduce((a, b) => a + b, 0) / s.pes.length : null,
       stock_count: s.stockCount,
-      sub_industries: [...s.subIndustries].sort((a, b) => (b.pct_change ?? -999) - (a.pct_change ?? -999)),
+      sub_industries: [...s.subIndustries].sort((a, b) => (b.pct_change ?? -Infinity) - (a.pct_change ?? -Infinity)),
     }));
   }
 
@@ -230,7 +240,7 @@
       return `
         <div class="rounded-lg p-4 border cursor-pointer transition-colors ${borderClass}"
              onclick="selectSector('${sector.name.replace(/'/g, "\\'")}')">
-          <div class="text-zinc-400 text-xs mb-2 leading-snug">${sector.name}</div>
+          <div class="text-zinc-400 text-xs mb-2 leading-snug">${esc(sector.name)}</div>
           <div class="${changeColor} text-xl font-semibold leading-none mb-2">${changeText}</div>
           <div class="flex items-center gap-2">
             <span class="text-zinc-600 text-xs">${sector.avg_pe !== null ? 'PE ' + sector.avg_pe.toFixed(1) + 'x' : '—'}</span>
@@ -267,7 +277,7 @@
       const ct = change === null ? '—' : `${sign}${change.toFixed(2)}%`;
       return `
         <tr class="border-b border-zinc-800 last:border-0">
-          <td class="py-2.5 pr-4 text-zinc-200 text-sm">${ind.industry}</td>
+          <td class="py-2.5 pr-4 text-zinc-200 text-sm">${esc(ind.industry)}</td>
           <td class="py-2.5 pr-4 text-zinc-500 text-sm text-right">${ind.stock_count}</td>
           <td class="py-2.5 pr-4 text-zinc-500 text-sm text-right">${ind.avg_pe !== null ? ind.avg_pe.toFixed(1) + 'x' : '—'}</td>
           <td class="py-2.5 text-right text-sm font-medium ${cc}">${ct}</td>
@@ -282,7 +292,7 @@
       <div class="bg-[#18181b] border border-zinc-800 rounded-lg p-5">
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-sm font-medium">
-            ${sectorName}
+            ${esc(sectorName)}
             <span class="text-zinc-600 font-normal ml-1">→ Sub-industries</span>
           </h3>
           <button onclick="selectSector('${sectorName.replace(/'/g, "\\'")}')"
