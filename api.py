@@ -546,5 +546,90 @@ def get_sector_pe_history(days: int = 365):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+def _safe_float(v, ndigits):
+    if v is None:
+        return None
+    f = float(v)
+    if not math.isfinite(f):
+        return None
+    return round(f, ndigits)
+
+@app.get("/api/gics-overview")
+def get_gics_overview(period: str = "1D"):
+    if period not in PERIOD_MAP:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid period '{period}'. Must be one of: {list(PERIOD_MAP.keys())}"
+        )
+
+    days = PERIOD_MAP[period]
+
+    try:
+        with db.engine.connect() as conn:
+            query = text(f"""
+                WITH
+                end_date AS (
+                    SELECT MAX(date) AS d FROM us_daily_prices
+                ),
+                current_prices AS (
+                    SELECT p.symbol, p.close AS current_close,
+                           COALESCE(NULLIF(p.market_cap, 0), t.market_cap) AS market_cap
+                    FROM us_daily_prices p
+                    JOIN tickers t ON p.symbol = t.ticker, end_date
+                    WHERE p.date = end_date.d
+                      AND p.close > 0
+                      AND COALESCE(NULLIF(p.market_cap, 0), t.market_cap) > 0
+                ),
+                start_prices AS (
+                    SELECT DISTINCT ON (p.symbol)
+                           p.symbol, p.close AS start_close
+                    FROM us_daily_prices p, end_date
+                    WHERE p.date <= end_date.d - INTERVAL '1 day' * {days}
+                      AND p.close > 0
+                    ORDER BY p.symbol, p.date DESC
+                )
+                SELECT
+                    i.name AS industry,
+                    COUNT(DISTINCT c.symbol) AS stock_count,
+                    SUM((c.current_close - s.start_close) / s.start_close * c.market_cap)
+                        / NULLIF(SUM(c.market_cap), 0) * 100 AS pct_change,
+                    SUM(
+                        CASE WHEN t.trailing_eps > 0
+                             AND (c.current_close / t.trailing_eps) BETWEEN 0 AND 200
+                        THEN (c.current_close / t.trailing_eps) * c.market_cap
+                        END
+                    ) / NULLIF(SUM(
+                        CASE WHEN t.trailing_eps > 0
+                             AND (c.current_close / t.trailing_eps) BETWEEN 0 AND 200
+                        THEN c.market_cap END
+                    ), 0) AS avg_pe
+                FROM current_prices c
+                JOIN start_prices s ON c.symbol = s.symbol
+                JOIN tickers t ON c.symbol = t.ticker
+                JOIN industries i ON t.industry_id = i.id
+                GROUP BY i.name
+                ORDER BY i.name
+            """)
+
+            rows = conn.execute(query).fetchall()
+
+        items = []
+        for row in rows:
+            industry, stock_count, pct_change, avg_pe = row
+            items.append({
+                "industry": industry,
+                "stock_count": int(stock_count) if stock_count is not None else 0,
+                "pct_change": _safe_float(pct_change, 4),
+                "avg_pe": _safe_float(avg_pe, 2),
+            })
+
+        return {"period": period, "items": items}
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
