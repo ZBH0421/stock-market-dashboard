@@ -1,0 +1,1016 @@
+# stocks.html Redesign Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Redesign `stocks.html` with shadcn zinc-dark aesthetic — Layout A (4 stat cards + donut in header, full-width table below) — while preserving all existing functionality and adding responsive design.
+
+**Architecture:** Single-file rewrite of `stocks.html`. No backend changes. All JS logic is self-contained in the file. The new design replaces Bootstrap with Tailwind CDN + custom CSS for zinc-dark theming, while keeping DataTables and ApexCharts for table and charts.
+
+**Tech Stack:** Tailwind CSS CDN (zinc-dark), DataTables 1.13.6, ApexCharts, jQuery 3.7, config.js (API_BASE_URL)
+
+---
+
+## API Contract (do not change)
+
+`GET /api/industries` → `{ industries: string[] }`
+
+`GET /api/industry/{name}` → `{ stocks: Stock[], donut_data: { series: number[], labels: string[] } }`
+
+```
+Stock {
+  symbol, company, price, market_cap, pe_ratio,
+  change_1d, change_1m, change_2m, change_3m, change_6m, change_12m, change_ytd,
+  volume, revenue,
+  history: { x: "YYYY-MM-DD", y: number }[]
+}
+```
+
+Timeframe options (match API field names): `1D → change_1d`, `1M → change_1m`, `2M → change_2m`, `3M → change_3m`, `6M → change_6m`, `12M → change_12m`, `YTD → change_ytd`
+
+---
+
+## File Map
+
+- **Modify:** `stocks.html` — full rewrite (CSS + HTML + JS in one file)
+- **No other files changed**
+
+---
+
+## Color Tokens (zinc-dark)
+
+```
+--zn-bg:       #09090b   (page background)
+--zn-card:     #18181b   (card background)
+--zn-border:   #27272a   (borders)
+--zn-muted:    #71717a   (muted text)
+--zn-sub:      #a1a1aa   (secondary text)
+--zn-text:     #fafafa   (primary text)
+--zn-accent:   #3b82f6   (blue accent)
+--pos-text:    #22c55e   (positive %)
+--pos-bg:      rgba(34,197,94,0.1)
+--neg-text:    #ef4444   (negative %)
+--neg-bg:      rgba(239,68,68,0.1)
+--neu-text:    #a1a1aa
+--neu-bg:      rgba(161,161,170,0.1)
+```
+
+Light theme overrides (toggled via `data-theme="light"` on `<html>`):
+```
+--zn-bg:       #f4f4f5
+--zn-card:     #ffffff
+--zn-border:   #e4e4e7
+--zn-muted:    #71717a
+--zn-sub:      #52525b
+--zn-text:     #09090b
+--pos-bg:      #dcfce7
+--pos-text:    #16a34a
+--neg-bg:      #fee2e2
+--neg-text:    #dc2626
+```
+
+---
+
+### Task 1: HTML Skeleton + CSS Variables
+
+**Files:**
+- Modify: `stocks.html` (replace entire file)
+
+- [ ] **Step 1: Write the full HTML skeleton with CSS**
+
+Replace `stocks.html` with the following. This step creates the structure only — JS data binding comes in later tasks, but all IDs/classes must match what later tasks expect.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Market Intelligence</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+  <style>
+    /* ── CSS Variables ─────────────────────────────────── */
+    :root {
+      --zn-bg:     #09090b;
+      --zn-card:   #18181b;
+      --zn-border: #27272a;
+      --zn-muted:  #71717a;
+      --zn-sub:    #a1a1aa;
+      --zn-text:   #fafafa;
+      --zn-accent: #3b82f6;
+      --pos-text:  #22c55e;
+      --pos-bg:    rgba(34,197,94,0.1);
+      --neg-text:  #ef4444;
+      --neg-bg:    rgba(239,68,68,0.1);
+      --neu-text:  #a1a1aa;
+      --neu-bg:    rgba(161,161,170,0.1);
+    }
+    [data-theme="light"] {
+      --zn-bg:     #f4f4f5;
+      --zn-card:   #ffffff;
+      --zn-border: #e4e4e7;
+      --zn-muted:  #71717a;
+      --zn-sub:    #52525b;
+      --zn-text:   #09090b;
+      --pos-bg:    #dcfce7;
+      --pos-text:  #16a34a;
+      --neg-bg:    #fee2e2;
+      --neg-text:  #dc2626;
+    }
+
+    /* ── Base ──────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--zn-bg);
+      color: var(--zn-text);
+      min-height: 100vh;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    /* ── Top Bar ───────────────────────────────────────── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 24px;
+      border-bottom: 1px solid var(--zn-border);
+      background: var(--zn-card);
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 12px; }
+    .topbar-right { display: flex; align-items: center; gap: 8px; }
+    .btn-ghost {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 500;
+      background: transparent; border: 1px solid var(--zn-border);
+      color: var(--zn-sub); cursor: pointer; text-decoration: none;
+      transition: background 0.15s, color 0.15s;
+    }
+    .btn-ghost:hover { background: var(--zn-border); color: var(--zn-text); }
+    .btn-primary-sm {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 500;
+      background: var(--zn-accent); border: none; color: #fff; cursor: pointer;
+      text-decoration: none; transition: opacity 0.15s;
+    }
+    .btn-primary-sm:hover { opacity: 0.88; }
+    .industry-select {
+      background: var(--zn-bg); color: var(--zn-text);
+      border: 1px solid var(--zn-border); border-radius: 6px;
+      padding: 6px 10px; font-size: 13px; cursor: pointer; outline: none;
+    }
+    .theme-btn {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: var(--zn-bg); border: 1px solid var(--zn-border);
+      color: var(--zn-sub); cursor: pointer; display: flex;
+      align-items: center; justify-content: center; transition: all 0.2s;
+    }
+    .theme-btn:hover { background: var(--zn-border); color: var(--zn-text); }
+
+    /* ── Page Content ──────────────────────────────────── */
+    .page { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+    /* ── Sector Header ─────────────────────────────────── */
+    .sector-header { margin-bottom: 20px; }
+    .sector-title {
+      font-size: 22px; font-weight: 800; letter-spacing: -0.02em;
+      color: var(--zn-text); margin-bottom: 12px;
+    }
+    .tf-pills { display: flex; gap: 4px; flex-wrap: wrap; }
+    .tf-pill {
+      padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;
+      background: var(--zn-card); border: 1px solid var(--zn-border);
+      color: var(--zn-sub); cursor: pointer; transition: all 0.15s;
+    }
+    .tf-pill:hover { border-color: var(--zn-accent); color: var(--zn-text); }
+    .tf-pill.active {
+      background: var(--zn-accent); border-color: var(--zn-accent); color: #fff;
+    }
+
+    /* ── Stats + Donut Row ─────────────────────────────── */
+    .stats-donut-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr 200px;
+      gap: 12px;
+      margin-bottom: 20px;
+      align-items: start;
+    }
+    .stat-card {
+      background: var(--zn-card);
+      border: 1px solid var(--zn-border);
+      border-radius: 10px;
+      padding: 16px 18px;
+    }
+    .stat-label { font-size: 11px; font-weight: 600; color: var(--zn-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+    .stat-value { font-size: 22px; font-weight: 800; color: var(--zn-text); line-height: 1.1; }
+    .stat-sub { font-size: 11px; color: var(--zn-muted); margin-top: 3px; }
+    .stat-pos { color: var(--pos-text); }
+    .stat-neg { color: var(--neg-text); }
+
+    .donut-card {
+      background: var(--zn-card);
+      border: 1px solid var(--zn-border);
+      border-radius: 10px;
+      padding: 12px;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    .donut-card-label { font-size: 10px; font-weight: 600; color: var(--zn-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+    #marketCapChart { width: 100%; }
+
+    /* ── Table Card ────────────────────────────────────── */
+    .table-card {
+      background: var(--zn-card);
+      border: 1px solid var(--zn-border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .table-toolbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; border-bottom: 1px solid var(--zn-border);
+      flex-wrap: wrap; gap: 8px;
+    }
+    .table-title { font-size: 14px; font-weight: 700; color: var(--zn-text); }
+    .table-scroll { overflow-x: auto; }
+
+    /* ── DataTable Overrides ───────────────────────────── */
+    table.dataTable { border-collapse: collapse !important; width: 100% !important; }
+    table.dataTable thead th {
+      background: var(--zn-bg) !important;
+      color: var(--zn-muted) !important;
+      font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--zn-border) !important;
+      padding: 10px 14px !important;
+      white-space: nowrap;
+    }
+    table.dataTable tbody td {
+      background: transparent !important;
+      color: var(--zn-text); font-size: 13px;
+      border-bottom: 1px solid var(--zn-border);
+      padding: 12px 14px !important;
+      vertical-align: middle;
+    }
+    table.dataTable tbody tr:hover td { background: rgba(255,255,255,0.03) !important; }
+    [data-theme="light"] table.dataTable tbody tr:hover td { background: rgba(0,0,0,0.02) !important; }
+    .dataTables_wrapper .dataTables_length,
+    .dataTables_wrapper .dataTables_filter,
+    .dataTables_wrapper .dataTables_info,
+    .dataTables_wrapper .dataTables_paginate { color: var(--zn-sub) !important; font-size: 13px; }
+    .dataTables_wrapper .dataTables_filter input,
+    .dataTables_wrapper .dataTables_length select {
+      background: var(--zn-bg); color: var(--zn-text);
+      border: 1px solid var(--zn-border); border-radius: 6px; padding: 4px 8px;
+      outline: none;
+    }
+    .dataTables_wrapper .dataTables_paginate .paginate_button {
+      color: var(--zn-sub) !important; border-radius: 6px !important;
+    }
+    .dataTables_wrapper .dataTables_paginate .paginate_button.current,
+    .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+      background: var(--zn-border) !important;
+      border-color: var(--zn-border) !important;
+      color: var(--zn-text) !important;
+    }
+    .dt-controls { padding: 12px 18px; border-top: 1px solid var(--zn-border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+
+    /* ── Badges ────────────────────────────────────────── */
+    .ticker-badge {
+      display: inline-block; padding: 3px 8px; border-radius: 5px; font-size: 12px; font-weight: 700;
+      background: rgba(59,130,246,0.12); color: var(--zn-accent);
+    }
+    .pct-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 64px; padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: filter 0.15s, transform 0.1s;
+    }
+    .pct-badge:hover { filter: brightness(1.1); transform: translateY(-1px); }
+    .pct-pos { background: var(--pos-bg); color: var(--pos-text); }
+    .pct-neg { background: var(--neg-bg); color: var(--neg-text); }
+    .pct-neu { background: var(--neu-bg); color: var(--neu-text); }
+
+    /* ── Sparkline Tooltip ─────────────────────────────── */
+    #chartTooltip {
+      position: fixed; display: none;
+      width: 360px; min-height: 260px;
+      background: var(--zn-card); border: 1px solid var(--zn-border);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+      border-radius: 12px; padding: 16px; z-index: 9999; pointer-events: none;
+    }
+    #chartContainer { width: 100%; height: 140px; margin-top: 8px; }
+
+    /* ── Responsive ────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .stats-donut-row {
+        grid-template-columns: 1fr 1fr;
+      }
+      .donut-card {
+        grid-column: 1 / -1;
+      }
+    }
+    @media (max-width: 600px) {
+      .topbar { padding: 10px 16px; }
+      .page { padding: 16px; }
+      .stats-donut-row { grid-template-columns: 1fr 1fr; gap: 8px; }
+      .sector-title { font-size: 18px; }
+      .stat-value { font-size: 18px; }
+      table.dataTable thead th,
+      table.dataTable tbody td { padding: 8px 10px !important; font-size: 12px; }
+      .tf-pills { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; }
+      #chartTooltip { width: calc(100vw - 32px); min-height: auto; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Bar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <a href="index.html" class="btn-ghost">
+        <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+          <path d="M8.707 1.5a1 1 0 0 0-1.414 0L.646 8.146a.5.5 0 0 0 .708.708L2 8.207V13.5A1.5 1.5 0 0 0 3.5 15h9a1.5 1.5 0 0 0 1.5-1.5V8.207l.646.647a.5.5 0 0 0 .708-.708L13 5.793V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.293L8.707 1.5Z"/>
+        </svg>
+        Home
+      </a>
+      <select id="industrySelector" class="industry-select"></select>
+    </div>
+    <div class="topbar-right">
+      <a href="pe_history.html" class="btn-ghost">PE History</a>
+      <button class="btn-ghost" onclick="window.print()">Export PDF</button>
+      <button class="theme-btn" id="themeToggle" title="Toggle theme">
+        <svg id="iconSun" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+          <path d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0zm0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13zm7-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5zM2 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 2 8zm10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0zm-9.193 9.193a.5.5 0 0 1 0 .707L2.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0zm9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707zM4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708z"/>
+        </svg>
+        <svg id="iconMoon" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style="display:none">
+          <path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="page">
+
+    <!-- Sector Header -->
+    <div class="sector-header">
+      <div class="sector-title" id="sectorTitle">Loading…</div>
+      <div class="tf-pills" id="tfPills">
+        <button class="tf-pill active" data-tf="1D">1D</button>
+        <button class="tf-pill" data-tf="1M">1M</button>
+        <button class="tf-pill" data-tf="2M">2M</button>
+        <button class="tf-pill" data-tf="3M">3M</button>
+        <button class="tf-pill" data-tf="6M">6M</button>
+        <button class="tf-pill" data-tf="12M">12M</button>
+        <button class="tf-pill" data-tf="YTD">YTD</button>
+      </div>
+    </div>
+
+    <!-- Stats + Donut Row -->
+    <div class="stats-donut-row">
+      <div class="stat-card">
+        <div class="stat-label">Total Market Cap</div>
+        <div class="stat-value" id="statMktCap">—</div>
+        <div class="stat-sub" id="statStockCount">— stocks</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Avg PE Ratio</div>
+        <div class="stat-value" id="statPE">—</div>
+        <div class="stat-sub">trailing 12m</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Best Performer</div>
+        <div class="stat-value stat-pos" id="statBestPct">—</div>
+        <div class="stat-sub" id="statBestName">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Worst Performer</div>
+        <div class="stat-value stat-neg" id="statWorstPct">—</div>
+        <div class="stat-sub" id="statWorstName">—</div>
+      </div>
+      <div class="donut-card">
+        <div class="donut-card-label">Market Cap Mix</div>
+        <div id="marketCapChart"></div>
+      </div>
+    </div>
+
+    <!-- Table Card -->
+    <div class="table-card">
+      <div class="table-toolbar">
+        <span class="table-title">All Stocks</span>
+      </div>
+      <div class="table-scroll">
+        <table id="stocksTable" style="width:100%">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Symbol</th>
+              <th>Company</th>
+              <th>Price</th>
+              <th>Mkt Cap</th>
+              <th>P/E</th>
+              <th class="tf-1D">1D %</th>
+              <th class="tf-1M">1M %</th>
+              <th class="tf-2M">2M %</th>
+              <th class="tf-3M">3M %</th>
+              <th class="tf-6M">6M %</th>
+              <th class="tf-12M">12M %</th>
+              <th class="tf-YTD">YTD %</th>
+              <th>Volume</th>
+              <th>Revenue</th>
+            </tr>
+          </thead>
+          <tbody id="stocksTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sparkline Tooltip -->
+  <div id="chartTooltip">
+    <div id="tooltipHeader"></div>
+    <div id="chartContainer"></div>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+  <script src="config.js"></script>
+  <script>
+    /* ── JS goes here (Tasks 2–4) ── */
+  </script>
+</body>
+</html>
+```
+
+- [ ] **Step 2: Verify the file loads without errors**
+
+```bash
+# Start or check service
+curl -s http://localhost:8087/stocks.html | grep -c "stat-card"
+# Expected: 4
+```
+
+- [ ] **Step 3: Commit skeleton**
+
+```bash
+cd /home/ubuntu/stock-market-dashboard
+git add stocks.html
+git commit -m "feat: stocks.html zinc-dark skeleton — HTML + CSS structure"
+```
+
+---
+
+### Task 2: Theme Toggle + Industry Selector JS
+
+**Files:**
+- Modify: `stocks.html` — replace `/* ── JS goes here ── */` comment with JS
+
+- [ ] **Step 1: Add theme + industry selector JS inside `<script>` block**
+
+Replace the `/* ── JS goes here (Tasks 2–4) ── */` comment with:
+
+```javascript
+// ── State ──────────────────────────────────────────────
+var stockData = {};
+var tooltipChart = null;
+var dataTableInstance = null;
+var currentIndustry = 'Airlines';
+var currentTf = '1D';
+window.donutChart = null;
+
+// ── Theme ──────────────────────────────────────────────
+const root = document.documentElement;
+const sunIcon = document.getElementById('iconSun');
+const moonIcon = document.getElementById('iconMoon');
+
+function applyTheme(theme) {
+  if (theme === 'light') {
+    root.setAttribute('data-theme', 'light');
+    sunIcon.style.display = 'none';
+    moonIcon.style.display = 'block';
+  } else {
+    root.removeAttribute('data-theme');
+    sunIcon.style.display = 'block';
+    moonIcon.style.display = 'none';
+  }
+  localStorage.setItem('theme', theme);
+  if (window.donutChart) updateDonutTheme(theme);
+}
+
+// Default: dark
+const savedTheme = localStorage.getItem('theme') || 'dark';
+applyTheme(savedTheme);
+
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const isLight = root.getAttribute('data-theme') === 'light';
+  applyTheme(isLight ? 'dark' : 'light');
+});
+
+// ── URL Param ──────────────────────────────────────────
+const urlParams = new URLSearchParams(window.location.search);
+const indParam = urlParams.get('industry');
+if (indParam) currentIndustry = indParam;
+
+// ── Timeframe Pills ────────────────────────────────────
+document.querySelectorAll('.tf-pill').forEach(btn => {
+  btn.addEventListener('click', function () {
+    document.querySelectorAll('.tf-pill').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    currentTf = this.dataset.tf;
+    applyTimeframe(currentTf);
+    updateBestWorstCards(currentTf);
+  });
+});
+
+// ── Industry Selector ──────────────────────────────────
+$('#industrySelector').on('change', function () {
+  const newInd = $(this).val();
+  try { window.history.pushState({}, '', '?industry=' + encodeURIComponent(newInd)); } catch(e) {}
+  loadData(newInd);
+});
+
+// ── Init ───────────────────────────────────────────────
+$(document).ready(async function () {
+  // Populate industry dropdown
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/industries`);
+    const data = await res.json();
+    const sel = document.getElementById('industrySelector');
+    data.industries.forEach(ind => {
+      const opt = document.createElement('option');
+      opt.value = ind;
+      opt.textContent = ind;
+      sel.appendChild(opt);
+    });
+    sel.value = currentIndustry;
+  } catch(e) { console.error('Failed to load industries', e); }
+
+  await loadData(currentIndustry);
+});
+```
+
+- [ ] **Step 2: Verify theme persists on reload**
+
+```bash
+# Open in browser: http://localhost:8087/stocks.html
+# Click theme toggle → reload → should stay in same theme
+# Check console for errors
+curl -s http://localhost:8087/stocks.html | grep -c "applyTheme"
+# Expected: >= 1
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add stocks.html
+git commit -m "feat: stocks.html theme toggle + industry selector JS"
+```
+
+---
+
+### Task 3: Data Loading + Stat Cards + DataTable
+
+**Files:**
+- Modify: `stocks.html` — add functions after the init block from Task 2
+
+- [ ] **Step 1: Add helper functions + loadData + DataTable init**
+
+Add the following functions inside the `<script>` block, after the `$(document).ready` block from Task 2:
+
+```javascript
+// ── Helpers ────────────────────────────────────────────
+function fmtMktCap(v) {
+  if (!v) return '-';
+  if (v >= 1e12) return '$' + (v/1e12).toFixed(2) + 'T';
+  return '$' + (v/1e9).toFixed(2) + 'B';
+}
+
+function tfField(tf) {
+  const map = { '1D':'change_1d','1M':'change_1m','2M':'change_2m',
+                '3M':'change_3m','6M':'change_6m','12M':'change_12m','YTD':'change_ytd' };
+  return map[tf] || 'change_1d';
+}
+
+function tfColIndex(tf) {
+  // column indices in DataTable: 0=#, 1=Sym, 2=Co, 3=Price, 4=MktCap, 5=PE,
+  // 6=1D, 7=1M, 8=2M, 9=3M, 10=6M, 11=12M, 12=YTD, 13=Vol, 14=Rev
+  const map = { '1D':6,'1M':7,'2M':8,'3M':9,'6M':10,'12M':11,'YTD':12 };
+  return map[tf] || 6;
+}
+
+function renderPctCell(symbol, tf, val) {
+  if (val === null || val === undefined) return `<td class="tf-${tf}">-</td>`;
+  const cls = val > 0 ? 'pct-pos' : (val < 0 ? 'pct-neg' : 'pct-neu');
+  const sign = val > 0 ? '+' : '';
+  return `<td class="tf-${tf}"><span class="pct-badge ${cls} chart-trigger" data-symbol="${symbol}" data-tf="${tf}">${sign}${val.toFixed(1)}%</span></td>`;
+}
+
+// ── Stat Cards ─────────────────────────────────────────
+function updateStatCards(stocks) {
+  if (!stocks || stocks.length === 0) return;
+
+  // Total market cap
+  const totalMktCap = stocks.reduce((s, st) => s + (st.market_cap || 0), 0);
+  document.getElementById('statMktCap').textContent = fmtMktCap(totalMktCap);
+  document.getElementById('statStockCount').textContent = stocks.length + ' stocks';
+
+  // Avg PE
+  const peStocks = stocks.filter(s => s.pe_ratio && s.pe_ratio > 0);
+  const avgPE = peStocks.length ? (peStocks.reduce((s, st) => s + st.pe_ratio, 0) / peStocks.length) : null;
+  document.getElementById('statPE').textContent = avgPE ? avgPE.toFixed(1) + '×' : '—';
+
+  // Best/Worst for current timeframe
+  updateBestWorstCards(currentTf);
+}
+
+function updateBestWorstCards(tf) {
+  const field = tfField(tf);
+  const stocks = window._lastStocks || [];
+  if (!stocks.length) return;
+
+  const withVal = stocks.filter(s => s[field] !== null && s[field] !== undefined);
+  if (!withVal.length) {
+    document.getElementById('statBestPct').textContent = '—';
+    document.getElementById('statBestName').textContent = '—';
+    document.getElementById('statWorstPct').textContent = '—';
+    document.getElementById('statWorstName').textContent = '—';
+    return;
+  }
+
+  const sorted = [...withVal].sort((a, b) => b[field] - a[field]);
+  const best = sorted[0];
+  const worst = sorted[sorted.length - 1];
+
+  const bestSign = best[field] > 0 ? '+' : '';
+  document.getElementById('statBestPct').textContent = bestSign + best[field].toFixed(1) + '%';
+  document.getElementById('statBestName').textContent = best.symbol + ' · ' + tf;
+
+  const worstSign = worst[field] > 0 ? '+' : '';
+  document.getElementById('statWorstPct').textContent = worstSign + worst[field].toFixed(1) + '%';
+  document.getElementById('statWorstName').textContent = worst.symbol + ' · ' + tf;
+}
+
+// ── applyTimeframe ─────────────────────────────────────
+function applyTimeframe(tf) {
+  if (!dataTableInstance) return;
+  const allTfCols = [6, 7, 8, 9, 10, 11, 12];
+  dataTableInstance.columns(allTfCols).visible(false);
+  dataTableInstance.column(tfColIndex(tf)).visible(true);
+}
+
+// ── loadData ───────────────────────────────────────────
+async function loadData(industry) {
+  currentIndustry = industry;
+  try {
+    if (dataTableInstance) { dataTableInstance.destroy(); dataTableInstance = null; }
+    if (window.donutChart) { window.donutChart.destroy(); window.donutChart = null; }
+
+    document.getElementById('sectorTitle').textContent = industry;
+    document.getElementById('stocksTableBody').innerHTML =
+      '<tr><td colspan="15" style="text-align:center;padding:40px;color:var(--zn-muted)">Loading…</td></tr>';
+
+    const res = await fetch(`${API_BASE_URL}/api/industry/${encodeURIComponent(industry)}?t=${Date.now()}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    stockData = {};
+    data.stocks.forEach(s => { stockData[s.symbol] = s.history; });
+    window._lastStocks = data.stocks;
+
+    const tbody = document.getElementById('stocksTableBody');
+    tbody.innerHTML = '';
+
+    if (!data.stocks.length) {
+      tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;padding:40px;color:var(--zn-muted)">No stocks found.</td></tr>';
+      return;
+    }
+
+    data.stocks.forEach((s, idx) => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${idx + 1}</td>
+        <td><a href="stock.html?ticker=${s.symbol}" target="_blank" style="text-decoration:none"><span class="ticker-badge">${s.symbol}</span></a></td>
+        <td style="font-weight:500">${s.company}</td>
+        <td>${s.price ? '$' + s.price.toFixed(2) : '-'}</td>
+        <td data-order="${s.market_cap || 0}">${fmtMktCap(s.market_cap)}</td>
+        <td>${s.pe_ratio ? s.pe_ratio.toFixed(1) + '×' : '-'}</td>
+        ${renderPctCell(s.symbol, '1D', s.change_1d)}
+        ${renderPctCell(s.symbol, '1M', s.change_1m)}
+        ${renderPctCell(s.symbol, '2M', s.change_2m)}
+        ${renderPctCell(s.symbol, '3M', s.change_3m)}
+        ${renderPctCell(s.symbol, '6M', s.change_6m)}
+        ${renderPctCell(s.symbol, '12M', s.change_12m)}
+        ${renderPctCell(s.symbol, 'YTD', s.change_ytd)}
+        <td>${s.volume ? (s.volume/1e6).toFixed(1)+'M' : '-'}</td>
+        <td>${s.revenue ? '$'+(s.revenue/1e9).toFixed(1)+'B' : '-'}</td>
+      `;
+      tbody.appendChild(row);
+    });
+
+    dataTableInstance = $('#stocksTable').DataTable({
+      pageLength: 25,
+      order: [[4, 'desc']],
+      columnDefs: [{ targets: [7, 8, 9, 10, 11, 12], visible: false }]
+    });
+
+    applyTimeframe(currentTf);
+    updateStatCards(data.stocks);
+    initDonutChart(data.donut_data);
+
+  } catch(err) {
+    document.getElementById('stocksTableBody').innerHTML =
+      `<tr><td colspan="15" style="text-align:center;padding:40px;color:#ef4444">Error: ${err.message}</td></tr>`;
+  }
+}
+```
+
+- [ ] **Step 2: Verify table loads and stat cards populate**
+
+Visit `http://localhost:8087/stocks.html?industry=Airlines` in browser.
+- Sector title should say "Airlines"
+- 4 stat cards should have values
+- Table should have sortable rows
+- Timeframe pills should filter the % column
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add stocks.html
+git commit -m "feat: stocks.html data loading, stat cards, DataTable wiring"
+```
+
+---
+
+### Task 4: Donut Chart + Theme Update
+
+**Files:**
+- Modify: `stocks.html` — add `initDonutChart` and `updateDonutTheme` functions
+
+- [ ] **Step 1: Add donut chart functions inside `<script>` block**
+
+Add after the `loadData` function:
+
+```javascript
+// ── Donut Chart ────────────────────────────────────────
+function updateDonutTheme(theme) {
+  if (!window.donutChart) return;
+  const isDark = theme === 'dark';
+  window.donutChart.updateOptions({
+    theme: { mode: isDark ? 'dark' : 'light' },
+    chart: { background: 'transparent' },
+    stroke: { colors: isDark ? ['#18181b'] : ['#ffffff'] },
+    plotOptions: {
+      pie: { donut: { labels: {
+        value: { color: isDark ? '#fafafa' : '#09090b' },
+        total: { color: isDark ? '#a1a1aa' : '#52525b' }
+      }}}
+    }
+  });
+}
+
+function initDonutChart(donutData) {
+  if (!donutData || !donutData.series || !donutData.series.length) {
+    document.getElementById('marketCapChart').innerHTML =
+      '<div style="text-align:center;padding:20px;color:var(--zn-muted);font-size:12px">No data</div>';
+    return;
+  }
+  const isDark = (root.getAttribute('data-theme') !== 'light');
+  const valColor = isDark ? '#fafafa' : '#09090b';
+  const subColor = isDark ? '#a1a1aa' : '#52525b';
+
+  const options = {
+    series: donutData.series,
+    labels: donutData.labels,
+    chart: {
+      type: 'donut', height: 160,
+      fontFamily: 'Inter, sans-serif',
+      background: 'transparent',
+      sparkline: { enabled: false }
+    },
+    colors: ['#3b82f6','#60a5fa','#93c5fd','#2563eb','#bfdbfe','#a1a1aa'],
+    theme: { mode: isDark ? 'dark' : 'light' },
+    stroke: { show: true, colors: isDark ? ['#18181b'] : ['#ffffff'], width: 2 },
+    plotOptions: {
+      pie: { donut: {
+        size: '70%',
+        labels: {
+          show: true,
+          name: { show: true, fontSize: '11px', fontWeight: 600, color: subColor },
+          value: {
+            show: true, fontSize: '16px', fontWeight: 800, color: valColor,
+            formatter: (val, opts) => {
+              const total = opts.globals.seriesTotals.reduce((a,b) => a+b, 0);
+              return ((val/total)*100).toFixed(1) + '%';
+            }
+          },
+          total: {
+            show: true, label: 'TOTAL', fontSize: '10px', fontWeight: 700, color: subColor,
+            formatter: w => '$' + (w.globals.seriesTotals.reduce((a,b)=>a+b,0)/1e9).toFixed(0) + 'B'
+          }
+        }
+      }}
+    },
+    dataLabels: { enabled: false },
+    legend: { show: false },
+    tooltip: {
+      theme: isDark ? 'dark' : 'light',
+      y: {
+        formatter: val => '$' + (val/1e9).toFixed(2) + 'B',
+        title: { formatter: s => s + ':' }
+      }
+    }
+  };
+
+  window.donutChart = new ApexCharts(document.getElementById('marketCapChart'), options);
+  window.donutChart.render();
+}
+```
+
+- [ ] **Step 2: Verify donut chart renders correctly**
+
+Visit `http://localhost:8087/stocks.html?industry=Airlines`.
+- Donut chart should appear in the top-right card
+- Toggling theme should update chart colors
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add stocks.html
+git commit -m "feat: stocks.html donut chart with theme-aware colors"
+```
+
+---
+
+### Task 5: Sparkline Hover Tooltip
+
+**Files:**
+- Modify: `stocks.html` — add sparkline event handlers inside `$(document).ready`
+
+- [ ] **Step 1: Add sparkline tooltip logic inside `$(document).ready`**
+
+Add the following inside the `$(document).ready(async function() { ... })` block, after the `await loadData(currentIndustry)` call:
+
+```javascript
+// ── Sparkline Tooltip ──────────────────────────────────
+$('#stocksTable').on('mouseenter', '.chart-trigger', function (e) {
+  const symbol = $(this).data('symbol');
+  const tf = $(this).data('tf');
+  const allData = stockData[symbol];
+  if (!allData || allData.length < 2) return;
+
+  // Slice history to timeframe window
+  const latestPt = allData[allData.length - 1];
+  const parts = latestPt.x.split('-').map(Number);
+  let ty = parts[0], tm = parts[1], td = parts[2];
+  const monthsMap = { '1M':1,'2M':2,'3M':3,'6M':6,'12M':12 };
+
+  let filteredData;
+  if (tf === '1D') {
+    filteredData = allData.slice(-2);
+  } else {
+    let tDateStr;
+    if (tf === 'YTD') {
+      tDateStr = `${ty}-01-01`;
+    } else {
+      tm -= (monthsMap[tf] || 1);
+      while (tm <= 0) { tm += 12; ty--; }
+      const maxD = new Date(ty, tm, 0).getDate();
+      td = Math.min(td, maxD);
+      tDateStr = `${ty}-${String(tm).padStart(2,'0')}-${String(td).padStart(2,'0')}`;
+    }
+    let startIdx = -1;
+    for (let i = allData.length - 1; i >= 0; i--) {
+      if (allData[i].x <= tDateStr) { startIdx = i; break; }
+    }
+    filteredData = (startIdx === -1) ? allData : allData.slice(startIdx);
+  }
+
+  const valText = $(this).text().trim();
+  const isDark = root.getAttribute('data-theme') !== 'light';
+  let color = $(this).hasClass('pct-pos')
+    ? (isDark ? '#22c55e' : '#16a34a')
+    : ($(this).hasClass('pct-neg') ? (isDark ? '#ef4444' : '#dc2626') : '#a1a1aa');
+  const textColor = isDark ? '#fafafa' : '#09090b';
+  const subColor = isDark ? '#a1a1aa' : '#52525b';
+
+  $('#tooltipHeader').html(`
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+      <div>
+        <div style="font-size:15px;font-weight:800;color:${textColor}">${symbol} <span style="font-size:11px;font-weight:400;color:${subColor}">(${tf})</span></div>
+        <div style="font-size:10px;color:${subColor};margin-top:2px">${filteredData.length} data points</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:18px;font-weight:800;color:${color}">${valText}</div>
+        <div style="font-size:10px;color:${subColor};margin-top:4px;line-height:1.4">
+          ${filteredData[0].x} <b style="color:${textColor}">$${filteredData[0].y.toFixed(2)}</b><br>
+          ${filteredData[filteredData.length-1].x} <b style="color:${textColor}">$${filteredData[filteredData.length-1].y.toFixed(2)}</b>
+        </div>
+      </div>
+    </div>
+  `);
+
+  const opts = {
+    series: [{ name: 'Price', data: filteredData }],
+    chart: { type: 'area', height: 140, sparkline: { enabled: true }, animations: { enabled: false } },
+    stroke: { curve: 'smooth', width: 2, colors: [color] },
+    fill: { type: 'gradient', gradient: { opacityFrom: 0.3, opacityTo: 0.02, colorStops: [{ offset: 0, color: color, opacity: 0.3 }, { offset: 100, color: color, opacity: 0 }] } },
+    colors: [color],
+    tooltip: { enabled: false },
+    yaxis: {
+      min: Math.min(...filteredData.map(d => d.y)) * 0.997,
+      max: Math.max(...filteredData.map(d => d.y)) * 1.003
+    }
+  };
+
+  if (tooltipChart) tooltipChart.destroy();
+  tooltipChart = new ApexCharts(document.getElementById('chartContainer'), opts);
+  tooltipChart.render();
+  $('#chartTooltip').fadeIn(100);
+});
+
+$(document).on('mousemove', function (e) {
+  if ($('#chartTooltip').is(':visible')) {
+    let tX = e.clientX + 20, tY = e.clientY + 20;
+    if (tX + 380 > window.innerWidth) tX = e.clientX - 380;
+    if (tY + 300 > window.innerHeight) tY = e.clientY - 300;
+    $('#chartTooltip').css({ top: tY, left: tX });
+  }
+});
+
+$('#stocksTable').on('mouseleave', '.chart-trigger', function () {
+  $('#chartTooltip').hide();
+});
+```
+
+- [ ] **Step 2: Verify sparkline works**
+
+Visit `http://localhost:8087/stocks.html?industry=Airlines`.
+- Hover over any % badge (e.g. `+2.5%`) — floating tooltip should appear with a mini chart
+- Move mouse away — tooltip should hide
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add stocks.html
+git commit -m "feat: stocks.html sparkline hover tooltip"
+```
+
+---
+
+### Task 6: Final Polish + Responsive Verification
+
+**Files:**
+- Modify: `stocks.html` — responsive CSS tweaks if needed
+
+- [ ] **Step 1: Verify responsive layout on mobile viewport**
+
+In browser DevTools, set viewport to 390×844 (iPhone 14).
+- [ ] Stat cards should appear 2×2 grid
+- [ ] Donut card should span full width below stat cards
+- [ ] Timeframe pills should scroll horizontally if overflow
+- [ ] Table should scroll horizontally (not clip)
+- [ ] Top bar should not overflow
+
+If any of the above fail, fix the CSS in the `<style>` block. Common fixes:
+
+For topbar overflow on small screens:
+```css
+@media (max-width: 480px) {
+  .topbar-left { flex-wrap: wrap; }
+  .industry-select { max-width: 160px; }
+}
+```
+
+- [ ] **Step 2: Verify dark/light theme on mobile**
+
+Toggle theme on mobile viewport — all colors should update correctly.
+
+- [ ] **Step 3: Run test suite to make sure nothing broke**
+
+```bash
+cd /home/ubuntu/stock-market-dashboard
+venv/bin/python -m pytest tests/ -v
+```
+
+Expected: all tests pass (no backend changes were made).
+
+- [ ] **Step 4: Final commit**
+
+```bash
+git add stocks.html
+git commit -m "feat: stocks.html zinc-dark redesign complete — responsive, all features preserved"
+```
+
+---
+
+## Self-Review Checklist
+
+- [x] All API fields used (`change_1d` etc.) match existing backend response
+- [x] Donut chart `donut_data.series` / `donut_data.labels` contract preserved
+- [x] DataTable column indices match header order (0-14)
+- [x] `applyTimeframe` hides cols 7-12, shows the active one — col 6 (1D) default
+- [x] `updateBestWorstCards` reads `window._lastStocks` set during `loadData`
+- [x] `window.donutChart` global ref updated by both `initDonutChart` and `loadData` destroy
+- [x] Sparkline reads from `stockData[symbol]` populated in `loadData`
+- [x] Theme toggle calls `updateDonutTheme` if chart exists
+- [x] No placeholder text or TBD in any step
