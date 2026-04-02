@@ -53,22 +53,24 @@
   // ─── GICS Sector Mapping ──────────────────────────────────────────────────
   const GICS_SECTORS = {
     "Information Technology": [
-      "Software—Application", "Software—Infrastructure", "Semiconductors",
-      "Semiconductor Equipment & Materials", "IT Services", "Computer Hardware",
+      "Software - Application", "Software - Infrastructure", "Semiconductors",
+      "Semiconductor Equipment & Materials", "Computer Hardware",
       "Electronic Components", "Electronics & Computer Distribution",
       "Information Technology Services", "Scientific & Technical Instruments",
-      "Technology Distributors", "Consumer Electronics"
+      "Consumer Electronics", "Communication Equipment"
     ],
     "Health Care": [
-      "Biotechnology", "Drug Manufacturers—General",
-      "Drug Manufacturers—Specialty & Generic", "Health Care Plans",
+      "Biotechnology", "Drug Manufacturers - General",
+      "Drug Manufacturers - Specialty & Generic", "Healthcare Plans",
       "Medical Devices", "Medical Instruments & Supplies",
       "Diagnostics & Research", "Medical Care Facilities",
-      "Pharmaceutical Retailers", "Health Information Services"
+      "Pharmaceutical Retailers", "Health Information Services",
+      "Medical Distribution"
     ],
     "Financials": [
-      "Banks—Diversified", "Banks—Regional", "Insurance—Diversified",
-      "Insurance—Life", "Insurance—Property & Casualty",
+      "Banks - Diversified", "Banks - Regional", "Insurance - Diversified",
+      "Insurance - Life", "Insurance - Property & Casualty",
+      "Insurance - Reinsurance", "Insurance - Specialty",
       "Asset Management", "Capital Markets",
       "Financial Data & Stock Exchanges", "Credit Services",
       "Mortgage Finance", "Insurance Brokers", "Financial Conglomerates"
@@ -79,15 +81,18 @@
       "Footwear & Accessories", "Luxury Goods", "Personal Services",
       "Specialty Retail", "Home Improvement Retail", "Department Stores",
       "Discount Stores", "Internet Retail", "Resorts & Casinos",
-      "Travel Services", "Lodging", "Leisure", "Publishing", "Gambling"
+      "Travel Services", "Lodging", "Leisure", "Publishing", "Gambling",
+      "Furnishings, Fixtures & Appliances", "Recreational Vehicles",
+      "Residential Construction", "Textile Manufacturing",
+      "Education & Training Services"
     ],
     "Communication Services": [
       "Telecom Services", "Internet Content & Information",
-      "Electronic Gaming & Multimedia", "Entertainment—Diversified",
+      "Electronic Gaming & Multimedia", "Entertainment",
       "Broadcasting", "Advertising Agencies"
     ],
     "Industrials": [
-      "Aerospace & Defense", "Airlines", "Air Freight & Logistics",
+      "Aerospace & Defense", "Airlines", "Integrated Freight & Logistics",
       "Railroads", "Trucking", "Marine Shipping",
       "Farm & Heavy Construction Machinery", "Industrial Distribution",
       "Specialty Industrial Machinery", "Tools & Accessories",
@@ -95,12 +100,16 @@
       "Infrastructure Operations", "Waste Management",
       "Staffing & Employment Services", "Consulting Services",
       "Security & Protection Services", "Building Products & Equipment",
-      "Rental & Leasing Services"
+      "Rental & Leasing Services", "Airports & Air Services",
+      "Business Equipment & Supplies", "Specialty Business Services",
+      "Metal Fabrication", "Conglomerates",
+      "Pollution & Treatment Controls"
     ],
     "Energy": [
-      "Oil & Gas E&P", "Oil & Gas Integrated", "Oil & Gas Midstream",
-      "Oil & Gas Refining & Marketing", "Oil & Gas Drilling",
-      "Oil & Gas Equipment & Services", "Thermal Coal", "Uranium"
+      "Oil & Gas Exploration & Production", "Oil & Gas Integrated",
+      "Oil & Gas Midstream", "Oil & Gas Refining & Marketing",
+      "Oil & Gas Drilling", "Oil & Gas Equipment & Services",
+      "Thermal Coal", "Uranium", "Solar"
     ],
     "Materials": [
       "Specialty Chemicals", "Agricultural Inputs", "Chemicals",
@@ -111,19 +120,20 @@
       "Packaging & Containers"
     ],
     "Utilities": [
-      "Utilities—Regulated Electric", "Utilities—Regulated Gas",
-      "Utilities—Regulated Water", "Utilities—Diversified",
-      "Utilities—Independent Power Producers", "Utilities—Renewable"
+      "Utilities - Regulated Electric", "Utilities - Regulated Gas",
+      "Utilities - Regulated Water", "Utilities - Diversified",
+      "Utilities - Independent Power Producers", "Utilities - Renewable"
     ],
     "Real Estate": [
-      "REIT—Diversified", "REIT—Industrial", "REIT—Office",
-      "REIT—Retail", "REIT—Residential", "REIT—Healthcare Facilities",
-      "REIT—Hotel & Motel", "REIT—Specialty", "REIT—Mortgage",
-      "Real Estate Services", "Real Estate—Diversified"
+      "REIT - Diversified", "REIT - Industrial", "REIT - Office",
+      "REIT - Retail", "REIT - Residential", "REIT - Healthcare Facilities",
+      "REIT - Hotel & Motel", "REIT - Specialty", "REIT - Mortgage",
+      "Real Estate Services", "Real Estate - Diversified",
+      "Real Estate - Development"
     ],
     "Consumer Staples": [
-      "Beverages—Brewers", "Beverages—Non-Alcoholic",
-      "Beverages—Wineries & Distilleries", "Confectioners",
+      "Beverages - Brewers", "Beverages - Non-Alcoholic",
+      "Beverages - Wineries & Distilleries", "Confectioners",
       "Farm Products", "Food Distribution", "Grocery Stores",
       "Household & Personal Products", "Packaged Foods", "Tobacco"
     ]
