@@ -287,7 +287,12 @@
       const ct = change === null ? '—' : `${sign}${change.toFixed(2)}%`;
       return `
         <tr class="border-b border-zinc-800 last:border-0">
-          <td class="py-2.5 pr-4 text-zinc-200 text-sm">${esc(ind.industry)}</td>
+          <td class="py-2.5 pr-4 text-sm">
+            <a href="stocks.html?industry=${encodeURIComponent(ind.industry)}"
+               class="text-zinc-200 hover:text-white hover:underline underline-offset-2 transition-colors">
+              ${esc(ind.industry)}
+            </a>
+          </td>
           <td class="py-2.5 pr-4 text-zinc-500 text-sm text-right">${ind.stock_count}</td>
           <td class="py-2.5 pr-4 text-zinc-500 text-sm text-right">${ind.avg_pe !== null ? ind.avg_pe.toFixed(1) + 'x' : '—'}</td>
           <td class="py-2.5 text-right text-sm font-medium ${cc}">${ct}</td>
