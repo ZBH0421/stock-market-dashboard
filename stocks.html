@@ -350,7 +350,371 @@
   <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
   <script src="config.js"></script>
   <script>
-    /* JS — Tasks 2-5 will populate this */
+    // ── State ──────────────────────────────────────────────
+    var stockData = {};
+    var tooltipChart = null;
+    var dataTableInstance = null;
+    var currentIndustry = 'Airlines';
+    var currentTf = '1D';
+    window.donutChart = null;
+    window._lastStocks = [];
+
+    // ── Theme ──────────────────────────────────────────────
+    const root = document.documentElement;
+    const sunIcon = document.getElementById('iconSun');
+    const moonIcon = document.getElementById('iconMoon');
+
+    function applyTheme(theme) {
+      if (theme === 'light') {
+        root.setAttribute('data-theme', 'light');
+        sunIcon.style.display = 'none';
+        moonIcon.style.display = 'block';
+      } else {
+        root.removeAttribute('data-theme');
+        sunIcon.style.display = 'block';
+        moonIcon.style.display = 'none';
+      }
+      localStorage.setItem('theme', theme);
+      if (window.donutChart) updateDonutTheme(theme);
+    }
+
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    applyTheme(savedTheme);
+
+    document.getElementById('themeToggle').addEventListener('click', () => {
+      const isLight = root.getAttribute('data-theme') === 'light';
+      applyTheme(isLight ? 'dark' : 'light');
+    });
+
+    // ── URL Param ──────────────────────────────────────────
+    const urlParams = new URLSearchParams(window.location.search);
+    const indParam = urlParams.get('industry');
+    if (indParam) currentIndustry = indParam;
+
+    // ── Timeframe Pills ────────────────────────────────────
+    document.querySelectorAll('.tf-pill').forEach(btn => {
+      btn.addEventListener('click', function () {
+        document.querySelectorAll('.tf-pill').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        currentTf = this.dataset.tf;
+        applyTimeframe(currentTf);
+        updateBestWorstCards(currentTf);
+      });
+    });
+
+    // ── Industry Selector ──────────────────────────────────
+    $('#industrySelector').on('change', function () {
+      const newInd = $(this).val();
+      try { window.history.pushState({}, '', '?industry=' + encodeURIComponent(newInd)); } catch(e) {}
+      loadData(newInd);
+    });
+
+    // ── Init ───────────────────────────────────────────────
+    $(document).ready(async function () {
+      // Populate industry dropdown
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/industries`);
+        const data = await res.json();
+        const sel = document.getElementById('industrySelector');
+        data.industries.forEach(ind => {
+          const opt = document.createElement('option');
+          opt.value = ind;
+          opt.textContent = ind;
+          sel.appendChild(opt);
+        });
+        sel.value = currentIndustry;
+      } catch(e) { console.error('Failed to load industries', e); }
+
+      await loadData(currentIndustry);
+
+      // Sparkline tooltip
+      $('#stocksTable').on('mouseenter', '.chart-trigger', function () {
+        const symbol = $(this).data('symbol');
+        const tf = $(this).data('tf');
+        const allData = stockData[symbol];
+        if (!allData || allData.length < 2) return;
+
+        const latestPt = allData[allData.length - 1];
+        const parts = latestPt.x.split('-').map(Number);
+        let ty = parts[0], tm = parts[1], td = parts[2];
+        const monthsMap = { '1M':1,'2M':2,'3M':3,'6M':6,'12M':12 };
+
+        let filteredData;
+        if (tf === '1D') {
+          filteredData = allData.slice(-2);
+        } else {
+          let tDateStr;
+          if (tf === 'YTD') {
+            tDateStr = `${ty}-01-01`;
+          } else {
+            tm -= (monthsMap[tf] || 1);
+            while (tm <= 0) { tm += 12; ty--; }
+            const maxD = new Date(ty, tm, 0).getDate();
+            td = Math.min(td, maxD);
+            tDateStr = `${ty}-${String(tm).padStart(2,'0')}-${String(td).padStart(2,'0')}`;
+          }
+          let startIdx = -1;
+          for (let i = allData.length - 1; i >= 0; i--) {
+            if (allData[i].x <= tDateStr) { startIdx = i; break; }
+          }
+          filteredData = (startIdx === -1) ? allData : allData.slice(startIdx);
+        }
+
+        const valText = $(this).text().trim();
+        const isDark = root.getAttribute('data-theme') !== 'light';
+        let color = $(this).hasClass('pct-pos')
+          ? (isDark ? '#22c55e' : '#16a34a')
+          : ($(this).hasClass('pct-neg') ? (isDark ? '#ef4444' : '#dc2626') : '#a1a1aa');
+        const textColor = isDark ? '#fafafa' : '#09090b';
+        const subColor = isDark ? '#a1a1aa' : '#52525b';
+
+        $('#tooltipHeader').html(`
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+            <div>
+              <div style="font-size:15px;font-weight:800;color:${textColor}">${symbol} <span style="font-size:11px;font-weight:400;color:${subColor}">(${tf})</span></div>
+              <div style="font-size:10px;color:${subColor};margin-top:2px">${filteredData.length} data points</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:18px;font-weight:800;color:${color}">${valText}</div>
+              <div style="font-size:10px;color:${subColor};margin-top:4px;line-height:1.4">
+                ${filteredData[0].x} <b style="color:${textColor}">$${filteredData[0].y.toFixed(2)}</b><br>
+                ${filteredData[filteredData.length-1].x} <b style="color:${textColor}">$${filteredData[filteredData.length-1].y.toFixed(2)}</b>
+              </div>
+            </div>
+          </div>
+        `);
+
+        const opts = {
+          series: [{ name: 'Price', data: filteredData }],
+          chart: { type: 'area', height: 140, sparkline: { enabled: true }, animations: { enabled: false } },
+          stroke: { curve: 'smooth', width: 2, colors: [color] },
+          fill: { type: 'gradient', gradient: { opacityFrom: 0.3, opacityTo: 0.02,
+            colorStops: [{ offset: 0, color: color, opacity: 0.3 }, { offset: 100, color: color, opacity: 0 }] } },
+          colors: [color],
+          tooltip: { enabled: false },
+          yaxis: {
+            min: Math.min(...filteredData.map(d => d.y)) * 0.997,
+            max: Math.max(...filteredData.map(d => d.y)) * 1.003
+          }
+        };
+
+        if (tooltipChart) tooltipChart.destroy();
+        tooltipChart = new ApexCharts(document.getElementById('chartContainer'), opts);
+        tooltipChart.render();
+        $('#chartTooltip').fadeIn(100);
+      });
+
+      $(document).on('mousemove', function (e) {
+        if ($('#chartTooltip').is(':visible')) {
+          let tX = e.clientX + 20, tY = e.clientY + 20;
+          if (tX + 380 > window.innerWidth) tX = e.clientX - 380;
+          if (tY + 300 > window.innerHeight) tY = e.clientY - 300;
+          $('#chartTooltip').css({ top: tY, left: tX });
+        }
+      });
+
+      $('#stocksTable').on('mouseleave', '.chart-trigger', function () {
+        $('#chartTooltip').hide();
+      });
+    });
+
+    // ── Helpers ────────────────────────────────────────────
+    function fmtMktCap(v) {
+      if (!v) return '-';
+      if (v >= 1e12) return '$' + (v/1e12).toFixed(2) + 'T';
+      return '$' + (v/1e9).toFixed(2) + 'B';
+    }
+
+    function tfField(tf) {
+      const map = { '1D':'change_1d','1M':'change_1m','2M':'change_2m',
+                    '3M':'change_3m','6M':'change_6m','12M':'change_12m','YTD':'change_ytd' };
+      return map[tf] || 'change_1d';
+    }
+
+    function tfColIndex(tf) {
+      const map = { '1D':6,'1M':7,'2M':8,'3M':9,'6M':10,'12M':11,'YTD':12 };
+      return map[tf] || 6;
+    }
+
+    function renderPctCell(symbol, tf, val) {
+      if (val === null || val === undefined) return `<td class="tf-${tf}">-</td>`;
+      const cls = val > 0 ? 'pct-pos' : (val < 0 ? 'pct-neg' : 'pct-neu');
+      const sign = val > 0 ? '+' : '';
+      return `<td class="tf-${tf}"><span class="pct-badge ${cls} chart-trigger" data-symbol="${symbol}" data-tf="${tf}">${sign}${val.toFixed(1)}%</span></td>`;
+    }
+
+    // ── Stat Cards ─────────────────────────────────────────
+    function updateStatCards(stocks) {
+      if (!stocks || stocks.length === 0) return;
+      const totalMktCap = stocks.reduce((s, st) => s + (st.market_cap || 0), 0);
+      document.getElementById('statMktCap').textContent = fmtMktCap(totalMktCap);
+      document.getElementById('statStockCount').textContent = stocks.length + ' stocks';
+      const peStocks = stocks.filter(s => s.pe_ratio && s.pe_ratio > 0);
+      const avgPE = peStocks.length ? (peStocks.reduce((s, st) => s + st.pe_ratio, 0) / peStocks.length) : null;
+      document.getElementById('statPE').textContent = avgPE ? avgPE.toFixed(1) + '×' : '—';
+      updateBestWorstCards(currentTf);
+    }
+
+    function updateBestWorstCards(tf) {
+      const field = tfField(tf);
+      const stocks = window._lastStocks || [];
+      if (!stocks.length) return;
+      const withVal = stocks.filter(s => s[field] !== null && s[field] !== undefined);
+      if (!withVal.length) {
+        ['statBestPct','statBestName','statWorstPct','statWorstName'].forEach(id => {
+          document.getElementById(id).textContent = '—';
+        });
+        return;
+      }
+      const sorted = [...withVal].sort((a, b) => b[field] - a[field]);
+      const best = sorted[0];
+      const worst = sorted[sorted.length - 1];
+      document.getElementById('statBestPct').textContent = (best[field] > 0 ? '+' : '') + best[field].toFixed(1) + '%';
+      document.getElementById('statBestName').textContent = best.symbol + ' · ' + tf;
+      document.getElementById('statWorstPct').textContent = (worst[field] > 0 ? '+' : '') + worst[field].toFixed(1) + '%';
+      document.getElementById('statWorstName').textContent = worst.symbol + ' · ' + tf;
+    }
+
+    // ── applyTimeframe ─────────────────────────────────────
+    function applyTimeframe(tf) {
+      if (!dataTableInstance) return;
+      dataTableInstance.columns([6,7,8,9,10,11,12]).visible(false);
+      dataTableInstance.column(tfColIndex(tf)).visible(true);
+    }
+
+    // ── loadData ───────────────────────────────────────────
+    async function loadData(industry) {
+      currentIndustry = industry;
+      try {
+        if (dataTableInstance) { dataTableInstance.destroy(); dataTableInstance = null; }
+        if (window.donutChart) { window.donutChart.destroy(); window.donutChart = null; }
+
+        document.getElementById('sectorTitle').textContent = industry;
+        document.getElementById('stocksTableBody').innerHTML =
+          '<tr><td colspan="15" style="text-align:center;padding:40px;color:var(--zn-muted)">Loading…</td></tr>';
+
+        const res = await fetch(`${API_BASE_URL}/api/industry/${encodeURIComponent(industry)}?t=${Date.now()}`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+
+        stockData = {};
+        data.stocks.forEach(s => { stockData[s.symbol] = s.history; });
+        window._lastStocks = data.stocks;
+
+        const tbody = document.getElementById('stocksTableBody');
+        tbody.innerHTML = '';
+
+        if (!data.stocks.length) {
+          tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;padding:40px;color:var(--zn-muted)">No stocks found.</td></tr>';
+          return;
+        }
+
+        data.stocks.forEach((s, idx) => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${idx + 1}</td>
+            <td><a href="stock.html?ticker=${s.symbol}" target="_blank" style="text-decoration:none"><span class="ticker-badge">${s.symbol}</span></a></td>
+            <td style="font-weight:500">${s.company}</td>
+            <td>${s.price ? '$' + s.price.toFixed(2) : '-'}</td>
+            <td data-order="${s.market_cap || 0}">${fmtMktCap(s.market_cap)}</td>
+            <td>${s.pe_ratio ? s.pe_ratio.toFixed(1) + '×' : '-'}</td>
+            ${renderPctCell(s.symbol, '1D', s.change_1d)}
+            ${renderPctCell(s.symbol, '1M', s.change_1m)}
+            ${renderPctCell(s.symbol, '2M', s.change_2m)}
+            ${renderPctCell(s.symbol, '3M', s.change_3m)}
+            ${renderPctCell(s.symbol, '6M', s.change_6m)}
+            ${renderPctCell(s.symbol, '12M', s.change_12m)}
+            ${renderPctCell(s.symbol, 'YTD', s.change_ytd)}
+            <td>${s.volume ? (s.volume/1e6).toFixed(1)+'M' : '-'}</td>
+            <td>${s.revenue ? '$'+(s.revenue/1e9).toFixed(1)+'B' : '-'}</td>
+          `;
+          tbody.appendChild(row);
+        });
+
+        dataTableInstance = $('#stocksTable').DataTable({
+          pageLength: 25,
+          order: [[4, 'desc']],
+          columnDefs: [{ targets: [7,8,9,10,11,12], visible: false }]
+        });
+
+        applyTimeframe(currentTf);
+        updateStatCards(data.stocks);
+        initDonutChart(data.donut_data);
+
+      } catch(err) {
+        document.getElementById('stocksTableBody').innerHTML =
+          `<tr><td colspan="15" style="text-align:center;padding:40px;color:#ef4444">Error: ${err.message}</td></tr>`;
+      }
+    }
+
+    // ── Donut Chart ────────────────────────────────────────
+    function updateDonutTheme(theme) {
+      if (!window.donutChart) return;
+      const isDark = theme === 'dark';
+      window.donutChart.updateOptions({
+        theme: { mode: isDark ? 'dark' : 'light' },
+        chart: { background: 'transparent' },
+        stroke: { colors: isDark ? ['#18181b'] : ['#ffffff'] },
+        plotOptions: { pie: { donut: { labels: {
+          value: { color: isDark ? '#fafafa' : '#09090b' },
+          total: { color: isDark ? '#a1a1aa' : '#52525b' }
+        }}}}
+      });
+    }
+
+    function initDonutChart(donutData) {
+      if (!donutData || !donutData.series || !donutData.series.length) {
+        document.getElementById('marketCapChart').innerHTML =
+          '<div style="text-align:center;padding:20px;color:var(--zn-muted);font-size:12px">No data</div>';
+        return;
+      }
+      const isDark = (root.getAttribute('data-theme') !== 'light');
+      const valColor = isDark ? '#fafafa' : '#09090b';
+      const subColor = isDark ? '#a1a1aa' : '#52525b';
+
+      const options = {
+        series: donutData.series,
+        labels: donutData.labels,
+        chart: {
+          type: 'donut', height: 160,
+          fontFamily: 'Inter, sans-serif',
+          background: 'transparent'
+        },
+        colors: ['#3b82f6','#60a5fa','#93c5fd','#2563eb','#bfdbfe','#a1a1aa'],
+        theme: { mode: isDark ? 'dark' : 'light' },
+        stroke: { show: true, colors: isDark ? ['#18181b'] : ['#ffffff'], width: 2 },
+        plotOptions: { pie: { donut: {
+          size: '70%',
+          labels: {
+            show: true,
+            name: { show: true, fontSize: '11px', fontWeight: 600, color: subColor },
+            value: {
+              show: true, fontSize: '16px', fontWeight: 800, color: valColor,
+              formatter: (val, opts) => {
+                const total = opts.globals.seriesTotals.reduce((a,b) => a+b, 0);
+                return ((val/total)*100).toFixed(1) + '%';
+              }
+            },
+            total: {
+              show: true, label: 'TOTAL', fontSize: '10px', fontWeight: 700, color: subColor,
+              formatter: w => '$' + (w.globals.seriesTotals.reduce((a,b)=>a+b,0)/1e9).toFixed(0) + 'B'
+            }
+          }
+        }}},
+        dataLabels: { enabled: false },
+        legend: { show: false },
+        tooltip: {
+          theme: isDark ? 'dark' : 'light',
+          y: {
+            formatter: val => '$' + (val/1e9).toFixed(2) + 'B',
+            title: { formatter: s => s + ':' }
+          }
+        }
+      };
+
+      window.donutChart = new ApexCharts(document.getElementById('marketCapChart'), options);
+      window.donutChart.render();
+    }
   </script>
 </body>
 </html>
