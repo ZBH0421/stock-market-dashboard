@@ -52,6 +52,7 @@
             max-width: 1000px;
             width: 90%;
             padding: 4rem 0;
+            padding-top: calc(52px + 3rem);
             text-align: center;
         }
 
@@ -142,24 +143,47 @@
             margin: 2rem auto;
         }
 
+        /* --- TOP NAV BAR --- */
+        .top-nav {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 52px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--card-border);
+            backdrop-filter: blur(10px);
+            z-index: 200;
+        }
+        .top-nav-links { display: flex; align-items: center; gap: 4px; }
+        .top-nav-link {
+            font-size: 0.85rem;
+            font-weight: 500;
+            padding: 5px 12px;
+            border-radius: 8px;
+            text-decoration: none;
+            color: var(--text-sub);
+            transition: background 0.15s, color 0.15s;
+        }
+        .top-nav-link:hover { background: var(--card-hover-bg); color: var(--text-main); }
+        .top-nav-link.active { color: var(--text-main); background: var(--card-hover-bg); }
+
         /* --- THEME TOGGLE BUTTON --- */
         .theme-toggle {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: var(--card-bg);
+            background: transparent;
             border: 1px solid var(--card-border);
             color: var(--text-main);
-            width: 44px;
-            height: 44px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
             transition: all 0.3s ease;
-            backdrop-filter: blur(5px);
-            z-index: 100;
+            flex-shrink: 0;
         }
 
         .theme-toggle:hover {
@@ -222,11 +246,13 @@
 </head>
 
 <body>
-    <!-- PE History Nav Link -->
-    <a class="nav-link text-secondary ms-3" href="/pe_history.html" style="font-size:0.9rem; position:fixed; top:18px; left:18px; z-index:100;">PE History</a>
-
-    <!-- Theme Toggle -->
-    <button class="theme-toggle" id="themeToggle" title="Toggle Dark/Light Mode">
+    <!-- Top Navigation Bar -->
+    <nav class="top-nav">
+        <div class="top-nav-links">
+            <a href="/" class="top-nav-link active">Market Intelligence</a>
+            <a href="/pe_history.html" class="top-nav-link">PE History</a>
+        </div>
+        <button class="theme-toggle" id="themeToggle" title="Toggle Dark/Light Mode">
         <!-- Sun Icon (for Dark Mode) -->
         <svg id="iconSun" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
             class="bi bi-sun-fill" viewBox="0 0 16 16">
@@ -240,6 +266,7 @@
                 d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z" />
         </svg>
     </button>
+    </nav>
 
     <div class="home-container">
         <h1>Market Intelligence</h1>
