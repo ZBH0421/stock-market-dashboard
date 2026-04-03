@@ -358,6 +358,11 @@
     var currentTf = '1D';
     window.donutChart = null;
     window._lastStocks = [];
+    var _loadGen = 0;
+
+    function esc(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
 
     // ── Theme ──────────────────────────────────────────────
     const root = document.documentElement;
@@ -471,7 +476,7 @@
         $('#tooltipHeader').html(`
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
             <div>
-              <div style="font-size:15px;font-weight:800;color:${textColor}">${symbol} <span style="font-size:11px;font-weight:400;color:${subColor}">(${tf})</span></div>
+              <div style="font-size:15px;font-weight:800;color:${textColor}">${esc(symbol)} <span style="font-size:11px;font-weight:400;color:${subColor}">(${tf})</span></div>
               <div style="font-size:10px;color:${subColor};margin-top:2px">${filteredData.length} data points</div>
             </div>
             <div style="text-align:right">
@@ -515,6 +520,7 @@
 
       $('#stocksTable').on('mouseleave', '.chart-trigger', function () {
         $('#chartTooltip').hide();
+        if (tooltipChart) { tooltipChart.destroy(); tooltipChart = null; }
       });
     });
 
@@ -540,7 +546,7 @@
       if (val === null || val === undefined) return `<td class="tf-${tf}">-</td>`;
       const cls = val > 0 ? 'pct-pos' : (val < 0 ? 'pct-neg' : 'pct-neu');
       const sign = val > 0 ? '+' : '';
-      return `<td class="tf-${tf}"><span class="pct-badge ${cls} chart-trigger" data-symbol="${symbol}" data-tf="${tf}">${sign}${val.toFixed(1)}%</span></td>`;
+      return `<td class="tf-${tf}"><span class="pct-badge ${cls} chart-trigger" data-symbol="${esc(symbol)}" data-tf="${tf}">${sign}${val.toFixed(1)}%</span></td>`;
     }
 
     // ── Stat Cards ─────────────────────────────────────────
@@ -585,6 +591,7 @@
     // ── loadData ───────────────────────────────────────────
     async function loadData(industry) {
       currentIndustry = industry;
+      const myGen = ++_loadGen;
       try {
         if (dataTableInstance) { dataTableInstance.destroy(); dataTableInstance = null; }
         if (window.donutChart) { window.donutChart.destroy(); window.donutChart = null; }
@@ -596,6 +603,8 @@
         const res = await fetch(`${API_BASE_URL}/api/industry/${encodeURIComponent(industry)}?t=${Date.now()}`);
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
+
+        if (myGen !== _loadGen) return;
 
         stockData = {};
         data.stocks.forEach(s => { stockData[s.symbol] = s.history; });
@@ -613,8 +622,8 @@
           const row = document.createElement('tr');
           row.innerHTML = `
             <td>${idx + 1}</td>
-            <td><a href="stock.html?ticker=${s.symbol}" target="_blank" style="text-decoration:none"><span class="ticker-badge">${s.symbol}</span></a></td>
-            <td style="font-weight:500">${s.company}</td>
+            <td><a href="stock.html?ticker=${esc(s.symbol)}" target="_blank" style="text-decoration:none"><span class="ticker-badge">${esc(s.symbol)}</span></a></td>
+            <td style="font-weight:500">${esc(s.company)}</td>
             <td>${s.price ? '$' + s.price.toFixed(2) : '-'}</td>
             <td data-order="${s.market_cap || 0}">${fmtMktCap(s.market_cap)}</td>
             <td>${s.pe_ratio ? s.pe_ratio.toFixed(1) + '×' : '-'}</td>
@@ -642,8 +651,9 @@
         initDonutChart(data.donut_data);
 
       } catch(err) {
+        if (myGen !== _loadGen) return;
         document.getElementById('stocksTableBody').innerHTML =
-          `<tr><td colspan="15" style="text-align:center;padding:40px;color:#ef4444">Error: ${err.message}</td></tr>`;
+          `<tr><td colspan="15" style="text-align:center;padding:40px;color:#ef4444">Error: ${esc(err.message)}</td></tr>`;
       }
     }
 
