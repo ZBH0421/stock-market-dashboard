@@ -217,7 +217,7 @@
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h5 class="fw-bold mb-0">Price History (2 Years)</h5>
                     </div>
-                    <div id="mainChart" style="min-height: 400px;"></div>
+                    <div id="priceChartContainer" style="min-height: 400px;"></div>
                 </div>
 
                 <div class="dashboard-card" id="newsCard">
@@ -309,7 +309,7 @@
         }
 
         function updateChartTheme(theme) {
-            if (window.mainChart) {
+            if (window.mainChart && typeof window.mainChart.updateOptions === 'function') {
                 window.mainChart.updateOptions({
                     theme: { mode: theme },
                     chart: { background: 'transparent' },
@@ -393,7 +393,7 @@
 
         function renderChart(history, info) {
             if (!history || history.length === 0) {
-                $('#mainChart').html('<div class="text-center py-5">No Price History Available</div>');
+                $('#priceChartContainer').html('<div class="text-center py-5">No Price History Available</div>');
                 return;
             }
 
@@ -437,7 +437,7 @@
                 }
             };
 
-            window.mainChart = new ApexCharts(document.querySelector("#mainChart"), options);
+            window.mainChart = new ApexCharts(document.querySelector("#priceChartContainer"), options);
             window.mainChart.render();
         }
 
