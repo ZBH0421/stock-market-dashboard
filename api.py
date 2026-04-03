@@ -505,14 +505,14 @@ def get_sector_pe_history(days: int = 365):
                 SELECT
                     i.name AS industry,
                     p.date,
-                    SUM((p.close / t.trailing_eps) * p.market_cap) / SUM(p.market_cap) AS weighted_pe
+                    SUM((p.close / t.trailing_eps) * t.market_cap) / SUM(t.market_cap) AS weighted_pe
                 FROM us_daily_prices p
                 JOIN tickers t ON p.symbol = t.ticker
                 JOIN industries i ON t.industry_id = i.id
                 WHERE
                     t.trailing_eps > 0
                     AND p.close > 0
-                    AND p.market_cap > 0
+                    AND t.market_cap > 0
                     AND (p.close / t.trailing_eps) BETWEEN 0 AND 200
                     AND p.date >= CURRENT_DATE - INTERVAL '{days} days'
                 GROUP BY i.name, p.date
@@ -545,6 +545,131 @@ def get_sector_pe_history(days: int = 365):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/market-pe")
+def get_market_pe():
+    """
+    Returns the current market-cap-weighted trailing PE across all tickers,
+    plus the 52-week high and low of the same metric.
+    """
+    try:
+        with db.engine.connect() as conn:
+            # Current market PE (latest trading day)
+            current = conn.execute(text("""
+                SELECT
+                    SUM((p.close / t.trailing_eps) * t.market_cap) / SUM(t.market_cap) AS market_pe
+                FROM us_daily_prices p
+                JOIN tickers t ON p.symbol = t.ticker
+                WHERE
+                    t.trailing_eps > 0
+                    AND p.close > 0
+                    AND t.market_cap > 0
+                    AND (p.close / t.trailing_eps) BETWEEN 0 AND 200
+                    AND p.date = (SELECT MAX(date) FROM us_daily_prices)
+            """)).scalar()
+
+            # 52-week history for range
+            history = conn.execute(text("""
+                SELECT
+                    p.date,
+                    SUM((p.close / t.trailing_eps) * t.market_cap) / SUM(t.market_cap) AS market_pe
+                FROM us_daily_prices p
+                JOIN tickers t ON p.symbol = t.ticker
+                WHERE
+                    t.trailing_eps > 0
+                    AND p.close > 0
+                    AND t.market_cap > 0
+                    AND (p.close / t.trailing_eps) BETWEEN 0 AND 200
+                    AND p.date >= CURRENT_DATE - INTERVAL '365 days'
+                GROUP BY p.date
+                ORDER BY p.date
+            """)).fetchall()
+
+        pe_values = [float(r[1]) for r in history if r[1] is not None]
+        return {
+            "market_pe": round(float(current), 2) if current else None,
+            "year_high": round(max(pe_values), 2) if pe_values else None,
+            "year_low": round(min(pe_values), 2) if pe_values else None,
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/shiller-cape")
+def get_shiller_cape():
+    """
+    Returns the latest Shiller CAPE (Cyclically Adjusted PE) from Robert Shiller's
+    Yale dataset (ie_data.xls). Cached for 24 hours.
+    """
+    import urllib.request
+    import tempfile
+    import os
+    import time
+
+    CACHE_FILE = "/tmp/shiller_cape_cache.json"
+    CACHE_TTL = 86400  # 24 hours
+
+    # Return cached value if fresh
+    if os.path.exists(CACHE_FILE):
+        age = time.time() - os.path.getmtime(CACHE_FILE)
+        if age < CACHE_TTL:
+            with open(CACHE_FILE) as f:
+                import json
+                return json.load(f)
+
+    try:
+        url = "http://www.econ.yale.edu/~shiller/data/ie_data.xls"
+        with tempfile.NamedTemporaryFile(suffix=".xls", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        urllib.request.urlretrieve(url, tmp_path)
+
+        import xlrd
+        wb = xlrd.open_workbook(tmp_path)
+        ws = wb.sheet_by_name("Data")
+        os.unlink(tmp_path)
+
+        # Column 0 = Date (YYYY.MM decimal), Column 12 = CAPE (P/E10)
+        # Header rows occupy rows 0-7; data starts at row 8 (0-indexed: row 7)
+        cape_values = []
+        for row_idx in range(7, ws.nrows):
+            row = ws.row_values(row_idx)
+            date_val = row[0] if row else None
+            cape_val = row[12] if len(row) > 12 else None
+            if date_val and cape_val and cape_val != 'NA':
+                try:
+                    cape_float = float(cape_val)
+                    if 5 < cape_float < 200:
+                        cape_values.append((str(date_val), cape_float))
+                except (ValueError, TypeError):
+                    pass
+
+        if not cape_values:
+            raise ValueError("No CAPE data found in spreadsheet")
+
+        latest_date, latest_cape = cape_values[-1]
+        import json
+        result = {
+            "cape": round(latest_cape, 2),
+            "date": latest_date,
+            "source": "Robert Shiller / Yale (ie_data.xls)"
+        }
+        with open(CACHE_FILE, "w") as f:
+            json.dump(result, f)
+        return result
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        # Return cached stale value if available rather than error
+        if os.path.exists(CACHE_FILE):
+            with open(CACHE_FILE) as f:
+                import json
+                return json.load(f)
+        raise HTTPException(status_code=500, detail=f"Could not fetch Shiller CAPE: {e}")
+
 
 def _safe_float(v, ndigits):
     if v is None:

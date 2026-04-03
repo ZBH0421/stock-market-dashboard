@@ -3,161 +3,276 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sector PE History</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>PE History — Market Intelligence</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background: #0f172a; color: #e2e8f0; }
+        body { font-family: 'Inter', system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }
         .navbar-brand { font-weight: 700; font-size: 1.2rem; }
         .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; }
-        .card-header { background: transparent; border-bottom: 1px solid #334155; font-weight: 600; }
+        .card-header { background: transparent; border-bottom: 1px solid #334155; font-weight: 600; padding: 1rem 1.25rem; }
+
+        /* Mini stat cards */
+        .stat-card { border-radius: 12px; padding: 1.25rem 1.5rem; background: #1e293b; border: 1px solid #334155; }
+        .stat-label { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 0.25rem; }
+        .stat-value { font-size: 2rem; font-weight: 700; line-height: 1; }
+        .stat-sub { font-size: 0.75rem; color: #64748b; margin-top: 0.4rem; }
+        .stat-range { font-size: 0.7rem; color: #475569; margin-top: 0.25rem; }
+        .stat-badge { display: inline-block; font-size: 0.65rem; font-weight: 600; padding: 2px 7px; border-radius: 4px; margin-left: 6px; vertical-align: middle; }
+        .badge-high { background: #7f1d1d33; color: #f87171; border: 1px solid #7f1d1d; }
+        .badge-low { background: #14532d33; color: #4ade80; border: 1px solid #14532d; }
+
+        /* Chart area */
         .sector-badge {
             display: inline-block; padding: 4px 10px; border-radius: 20px;
-            font-size: 0.75rem; cursor: pointer; margin: 3px; user-select: none;
+            font-size: 0.72rem; cursor: pointer; margin: 3px; user-select: none;
             border: 2px solid transparent; transition: opacity 0.2s;
         }
-        .sector-badge.hidden { opacity: 0.35; }
+        .sector-badge.hidden { opacity: 0.3; }
         .range-btn { font-size: 0.8rem; padding: 4px 12px; }
-        #peChart { min-height: 500px; }
+        #peChart { min-height: 480px; }
+
+        .loading-spinner { display: flex; align-items: center; justify-content: center; height: 480px; }
     </style>
 </head>
 <body>
     <nav class="navbar navbar-dark px-4 py-3" style="background: #1e293b; border-bottom: 1px solid #334155;">
         <a class="navbar-brand" href="/">&#8592; Market Intelligence</a>
-        <span class="text-secondary" style="font-size:0.9rem;">Sector PE History</span>
+        <span class="text-secondary" style="font-size:0.9rem;">PE History</span>
     </nav>
 
     <div class="container-fluid py-4 px-4">
-        <div class="card mb-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span>Historical Trailing PE by Sector</span>
-                <div class="btn-group" id="rangeSelector">
-                    <button class="btn btn-outline-secondary range-btn" data-days="90">3M</button>
-                    <button class="btn btn-outline-secondary range-btn active" data-days="180">6M</button>
-                    <button class="btn btn-outline-secondary range-btn" data-days="365">1Y</button>
+
+        <!-- Top: Market PE + Shiller CAPE mini cards -->
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-md-6">
+                <div class="stat-card h-100">
+                    <div class="stat-label">Market PE (our universe)</div>
+                    <div class="d-flex align-items-baseline gap-2">
+                        <div class="stat-value text-info" id="marketPeVal">—</div>
+                        <small class="text-secondary">× trailing</small>
+                    </div>
+                    <div class="stat-range" id="marketPeRange">Loading...</div>
+                    <div class="stat-sub">Market-cap weighted across all tracked stocks</div>
                 </div>
             </div>
-            <div class="card-body">
-                <div id="peChart"></div>
+            <div class="col-12 col-md-6">
+                <div class="stat-card h-100">
+                    <div class="stat-label">Shiller CAPE (S&amp;P 500)</div>
+                    <div class="d-flex align-items-baseline gap-2">
+                        <div class="stat-value text-warning" id="capeVal">—</div>
+                        <small class="text-secondary">× 10yr avg</small>
+                    </div>
+                    <div class="stat-range" id="capeDate">Loading...</div>
+                    <div class="stat-sub">Cyclically adjusted PE — Robert Shiller / Yale</div>
+                </div>
             </div>
         </div>
 
-        <div class="card">
-            <div class="card-header">Sectors <small class="text-secondary ms-2">click to toggle</small></div>
-            <div class="card-body" id="sectorToggles">
-                <div class="text-secondary">Loading...</div>
+        <!-- Bottom: sector chart -->
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <span>Trailing PE by Sector — Historical</span>
+                <div class="btn-group" id="rangeSelector">
+                    <button class="btn btn-outline-secondary range-btn active" data-days="365">1Y</button>
+                    <button class="btn btn-outline-secondary range-btn" data-days="1095">3Y</button>
+                    <button class="btn btn-outline-secondary range-btn" data-days="1825">5Y</button>
+                    <button class="btn btn-outline-secondary range-btn" data-days="9999">All</button>
+                </div>
+            </div>
+            <div class="card-body p-2">
+                <div id="peChart">
+                    <div class="loading-spinner text-secondary">Loading chart…</div>
+                </div>
             </div>
         </div>
+
+        <!-- Sector toggles -->
+        <div class="card">
+            <div class="card-header d-flex align-items-center gap-2">
+                Sectors
+                <small class="text-secondary">click to toggle</small>
+                <button class="btn btn-sm btn-outline-secondary ms-auto" id="btnShowAll" style="font-size:0.72rem;padding:2px 10px;">Show all</button>
+                <button class="btn btn-sm btn-outline-secondary" id="btnHideAll" style="font-size:0.72rem;padding:2px 10px;">Hide all</button>
+            </div>
+            <div class="card-body" id="sectorToggles">
+                <div class="text-secondary">Loading…</div>
+            </div>
+        </div>
+
     </div>
 
-    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script src="/jquery.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     <script src="config.js"></script>
     <script>
-        const COLORS = [
-            '#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6',
-            '#06b6d4','#f97316','#84cc16','#ec4899','#6366f1',
-            '#14b8a6','#f43f5e','#a855f7','#0ea5e9','#22c55e',
-            '#eab308','#64748b','#d946ef','#fb923c','#34d399'
-        ];
+    const COLORS = [
+        '#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6',
+        '#06b6d4','#f97316','#84cc16','#ec4899','#6366f1',
+        '#14b8a6','#f43f5e','#a855f7','#0ea5e9','#22c55e',
+        '#eab308','#64748b','#d946ef','#fb923c','#34d399'
+    ];
 
-        let chart = null;
-        let allSeries = [];
-        let hiddenSectors = new Set();
-        let currentDays = 180;
+    let chart = null;
+    let allSeries = [];
+    let hiddenSectors = new Set();
+    let currentDays = 365;
 
-        async function loadData(days) {
-            $('#peChart').html('<div class="text-center py-5 text-secondary">Loading...</div>');
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/sector-pe-history?days=${days}`);
-                const data = await res.json();
-                if (!data.sectors || data.sectors.length === 0) {
-                    $('#peChart').html('<div class="text-center py-5 text-secondary">No PE data yet. Backfill may still be running.</div>');
-                    $('#sectorToggles').html('<div class="text-secondary">No data available.</div>');
-                    return;
-                }
-                allSeries = data.sectors.map((s, i) => ({
-                    name: s.name,
-                    color: COLORS[i % COLORS.length],
-                    data: s.data.map(p => ({ x: new Date(p.date).getTime(), y: p.pe }))
-                }));
-                renderChart();
-                renderToggles();
-            } catch (e) {
-                $('#peChart').html('<div class="text-center py-5 text-danger">Failed to load data.</div>');
-            }
-        }
+    // Load Market PE and Shiller CAPE cards
+    async function loadStatCards() {
+        try {
+            const [mpe, cape] = await Promise.all([
+                fetch(`${API_BASE_URL}/api/market-pe`).then(r => r.json()),
+                fetch(`${API_BASE_URL}/api/shiller-cape`).then(r => r.json())
+            ]);
 
-        function getVisibleSeries() {
-            return allSeries.filter(s => !hiddenSectors.has(s.name));
-        }
-
-        function renderChart() {
-            const visible = getVisibleSeries();
-            const options = {
-                chart: {
-                    type: 'line', height: 500, background: 'transparent',
-                    toolbar: { show: true },
-                    zoom: { enabled: true }
-                },
-                series: visible,
-                stroke: { width: 2, curve: 'smooth' },
-                xaxis: { type: 'datetime', labels: { style: { colors: '#94a3b8' } } },
-                yaxis: {
-                    title: { text: 'Trailing PE', style: { color: '#94a3b8' } },
-                    labels: {
-                        formatter: v => v.toFixed(1) + 'x',
-                        style: { colors: '#94a3b8' }
-                    }
-                },
-                tooltip: {
-                    theme: 'dark',
-                    x: { format: 'MMM dd yyyy' },
-                    y: { formatter: v => v.toFixed(1) + 'x' }
-                },
-                legend: { show: false },
-                grid: { borderColor: '#334155' },
-                theme: { mode: 'dark' }
-            };
-
-            if (chart) {
-                chart.updateOptions({ series: visible });
+            if (mpe.market_pe != null) {
+                $('#marketPeVal').text(mpe.market_pe.toFixed(1) + '×');
+                const hi = mpe.year_high != null ? mpe.year_high.toFixed(1) : '—';
+                const lo = mpe.year_low  != null ? mpe.year_low.toFixed(1) : '—';
+                $('#marketPeRange').html(
+                    `52-week: <span class="badge-high stat-badge">H ${hi}×</span>` +
+                    `<span class="badge-low stat-badge ms-1">L ${lo}×</span>`
+                );
             } else {
-                $('#peChart').html('');
-                chart = new ApexCharts(document.querySelector('#peChart'), options);
-                chart.render();
+                $('#marketPeVal').text('N/A');
+                $('#marketPeRange').text('No data');
             }
-        }
 
-        function renderToggles() {
-            const container = $('#sectorToggles').empty();
-            allSeries.forEach(s => {
-                const hidden = hiddenSectors.has(s.name);
-                const badge = $(`<span class="sector-badge ${hidden ? 'hidden' : ''}">${s.name}</span>`)
-                    .css({ background: s.color + '22', borderColor: s.color, color: s.color })
-                    .on('click', function () {
-                        if (hiddenSectors.has(s.name)) {
-                            hiddenSectors.delete(s.name);
-                            $(this).removeClass('hidden');
-                        } else {
-                            hiddenSectors.add(s.name);
-                            $(this).addClass('hidden');
-                        }
-                        chart.updateOptions({ series: getVisibleSeries() });
-                    });
-                container.append(badge);
-            });
+            if (cape.cape != null) {
+                $('#capeVal').text(cape.cape.toFixed(1) + '×');
+                const d = cape.date ? formatShillerDate(cape.date) : '';
+                $('#capeDate').text(d ? `As of ${d}` : '');
+            } else {
+                $('#capeVal').text('N/A');
+                $('#capeDate').text('');
+            }
+        } catch (e) {
+            $('#marketPeVal').text('—');
+            $('#capeVal').text('—');
+            $('#marketPeRange, #capeDate').text('Failed to load');
         }
+    }
 
-        $('#rangeSelector').on('click', '.range-btn', function () {
-            $('.range-btn').removeClass('active');
-            $(this).addClass('active');
-            currentDays = parseInt($(this).data('days'));
+    function formatShillerDate(d) {
+        // d is like "2023.09"
+        const parts = String(d).split('.');
+        if (parts.length < 2) return d;
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const m = parseInt(parts[1], 10);
+        return months[m - 1] + ' ' + parts[0];
+    }
+
+    // Load sector PE history chart
+    async function loadData(days) {
+        $('#peChart').html('<div class="loading-spinner text-secondary">Loading chart…</div>');
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/sector-pe-history?days=${days}`);
+            const data = await res.json();
+            if (!data.sectors || data.sectors.length === 0) {
+                $('#peChart').html('<div class="loading-spinner text-secondary">No sector PE data available yet.</div>');
+                $('#sectorToggles').html('<div class="text-secondary">No data available.</div>');
+                return;
+            }
+            allSeries = data.sectors.map((s, i) => ({
+                name: s.name,
+                color: COLORS[i % COLORS.length],
+                data: s.data.map(p => ({ x: new Date(p.date).getTime(), y: p.pe }))
+            }));
             chart = null;
-            loadData(currentDays);
-        });
+            renderChart();
+            renderToggles();
+        } catch (e) {
+            $('#peChart').html('<div class="loading-spinner text-danger">Failed to load data.</div>');
+        }
+    }
 
+    function getVisibleSeries() {
+        return allSeries.filter(s => !hiddenSectors.has(s.name));
+    }
+
+    function renderChart() {
+        const visible = getVisibleSeries();
+        const options = {
+            chart: {
+                type: 'line', height: 480, background: 'transparent',
+                toolbar: { show: true },
+                zoom: { enabled: true },
+                animations: { enabled: false }
+            },
+            series: visible,
+            stroke: { width: 1.5, curve: 'smooth' },
+            xaxis: {
+                type: 'datetime',
+                labels: { style: { colors: '#94a3b8' }, datetimeUTC: false }
+            },
+            yaxis: {
+                title: { text: 'Trailing PE', style: { color: '#94a3b8' } },
+                labels: {
+                    formatter: v => v.toFixed(0) + '×',
+                    style: { colors: '#94a3b8' }
+                }
+            },
+            tooltip: {
+                theme: 'dark',
+                x: { format: 'MMM dd yyyy' },
+                y: { formatter: v => v.toFixed(1) + '×' }
+            },
+            legend: { show: false },
+            grid: { borderColor: '#334155' },
+            theme: { mode: 'dark' }
+        };
+
+        if (chart) {
+            chart.updateSeries(visible);
+        } else {
+            $('#peChart').html('');
+            chart = new ApexCharts(document.querySelector('#peChart'), options);
+            chart.render();
+        }
+    }
+
+    function renderToggles() {
+        const container = $('#sectorToggles').empty();
+        allSeries.forEach(s => {
+            const hidden = hiddenSectors.has(s.name);
+            const badge = $(`<span class="sector-badge ${hidden ? 'hidden' : ''}">${s.name}</span>`)
+                .css({ background: s.color + '22', borderColor: s.color, color: s.color })
+                .on('click', function () {
+                    if (hiddenSectors.has(s.name)) {
+                        hiddenSectors.delete(s.name);
+                        $(this).removeClass('hidden');
+                    } else {
+                        hiddenSectors.add(s.name);
+                        $(this).addClass('hidden');
+                    }
+                    if (chart) chart.updateSeries(getVisibleSeries());
+                });
+            container.append(badge);
+        });
+    }
+
+    $('#rangeSelector').on('click', '.range-btn', function () {
+        $('.range-btn').removeClass('active');
+        $(this).addClass('active');
+        currentDays = parseInt($(this).data('days'));
         loadData(currentDays);
+    });
+
+    $('#btnShowAll').on('click', function () {
+        hiddenSectors.clear();
+        $('#sectorToggles .sector-badge').removeClass('hidden');
+        if (chart) chart.updateSeries(getVisibleSeries());
+    });
+
+    $('#btnHideAll').on('click', function () {
+        allSeries.forEach(s => hiddenSectors.add(s.name));
+        $('#sectorToggles .sector-badge').addClass('hidden');
+        if (chart) chart.updateSeries([]);
+    });
+
+    // Init
+    loadStatCards();
+    loadData(currentDays);
     </script>
 </body>
 </html>
