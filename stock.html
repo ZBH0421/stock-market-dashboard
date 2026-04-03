@@ -194,7 +194,7 @@
     <div class="hero-section">
         <div class="container">
             <div class="d-flex align-items-center gap-2 mb-2">
-                <a href="index.html" class="btn btn-outline-secondary btn-sm">&larr; Dashboard</a>
+                <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">&larr; Back</a>
             </div>
             <div class="row align-items-end">
                 <div class="col-md-8">
@@ -220,7 +220,7 @@
                     <div id="mainChart" style="min-height: 400px;"></div>
                 </div>
 
-                <div class="dashboard-card">
+                <div class="dashboard-card" id="newsCard">
                     <h5 class="fw-bold mb-3">Latest News</h5>
                     <div id="newsFeed">
                         <div class="text-center py-4 text-secondary">Loading news...</div>
@@ -284,7 +284,7 @@
         const moonIcon = document.getElementById('iconMoon');
         const root = document.documentElement;
 
-        const savedTheme = localStorage.getItem('theme');
+        const savedTheme = localStorage.getItem('theme') || 'dark';
         if (savedTheme === 'dark') enableDarkMode();
 
         toggleBtn.addEventListener('click', () => {
@@ -350,7 +350,12 @@
             }
         }
 
+        function esc(s) {
+            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
         function renderHeader(info) {
+            document.title = info.symbol + ' — ' + info.company;
             $('#stockSymbol').text(info.symbol);
             $('#companyName').text(info.company);
 
@@ -440,7 +445,7 @@
             container.empty();
 
             if (!news || news.length === 0) {
-                container.html('<div class="text-center py-4 text-secondary">No news articles found.</div>');
+                $('#newsCard').hide();
                 return;
             }
 
@@ -448,9 +453,9 @@
                 const dateStr = n.date ? new Date(n.date * 1000).toLocaleString() : '';
                 const html = `
                     <div class="news-item">
-                        <a href="${n.link}" target="_blank" class="news-title">${n.title}</a>
+                        <a href="${esc(n.link)}" target="_blank" rel="noopener" class="news-title">${esc(n.title)}</a>
                         <div class="news-meta">
-                            <span class="fw-bold">${n.publisher}</span> · ${dateStr}
+                            <span class="fw-bold">${esc(n.publisher)}</span> · ${dateStr}
                         </div>
                     </div>
                 `;
