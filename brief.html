@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Brief — Market Intelligence</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; background: #0a0f1e; color: #e2e8f0; }
+
+        /* ── nav ── */
+        .top-nav {
+            position: sticky; top: 0; z-index: 100;
+            background: #0f172a; border-bottom: 1px solid #1e293b;
+            padding: 0 1.5rem; height: 52px;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .nav-links { display: flex; gap: 2px; }
+        .nav-link-item {
+            font-size: 0.85rem; font-weight: 500; padding: 5px 12px;
+            border-radius: 8px; text-decoration: none; color: #64748b;
+            transition: background 0.15s, color 0.15s;
+        }
+        .nav-link-item:hover { background: #1e293b; color: #e2e8f0; }
+        .nav-link-item.active { background: #1e293b; color: #e2e8f0; }
+
+        /* ── page layout ── */
+        .page { max-width: 960px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+
+        /* ── header ── */
+        .brief-header { margin-bottom: 2rem; }
+        .brief-date { font-size: 0.8rem; color: #475569; text-transform: uppercase; letter-spacing: .06em; }
+        .brief-title { font-size: 1.75rem; font-weight: 700; margin: .25rem 0 .75rem; }
+        .meta-row { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+        .meta-badge {
+            font-size: .72rem; font-weight: 600; padding: 3px 10px; border-radius: 20px;
+            text-transform: uppercase; letter-spacing: .04em;
+        }
+        .meta-badge.bearish  { background: #7f1d1d33; color: #f87171; border: 1px solid #7f1d1d; }
+        .meta-badge.bullish  { background: #14532d33; color: #4ade80; border: 1px solid #14532d; }
+        .meta-badge.neutral  { background: #1e293b;   color: #94a3b8; border: 1px solid #334155; }
+        .meta-time { font-size: .75rem; color: #475569; }
+        .regen-btn {
+            font-size: .75rem; padding: 4px 12px; border-radius: 8px;
+            background: transparent; border: 1px solid #334155; color: #64748b;
+            cursor: pointer; transition: all .15s;
+        }
+        .regen-btn:hover { background: #1e293b; color: #e2e8f0; border-color: #475569; }
+
+        /* ── section wrapper ── */
+        .section { margin-bottom: 1.75rem; }
+        .section-label {
+            font-size: .7rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .08em; color: #475569; margin-bottom: .75rem;
+        }
+
+        /* ── market summary ── */
+        .market-card {
+            background: #0f172a; border: 1px solid #1e293b; border-radius: 14px;
+            padding: 1.5rem;
+        }
+        .market-card p { font-size: .92rem; line-height: 1.75; color: #cbd5e1; margin: 0 0 .75rem; }
+        .market-card p:last-child { margin: 0; }
+
+        /* ── AI second opinion ── */
+        .opinion-card {
+            background: linear-gradient(135deg, #1e1b4b22, #312e8133);
+            border: 1px solid #4338ca44; border-radius: 14px;
+            padding: 1.25rem 1.5rem;
+            display: flex; gap: 1rem; align-items: flex-start;
+        }
+        .opinion-icon { font-size: 1.5rem; flex-shrink: 0; margin-top: 2px; }
+        .opinion-text { font-size: .9rem; line-height: 1.65; color: #c7d2fe; }
+
+        /* ── themes ── */
+        .themes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .75rem; }
+        .theme-card {
+            background: #0f172a; border: 1px solid #1e293b; border-radius: 12px;
+            padding: 1rem 1.1rem;
+        }
+        .theme-card.bearish { border-left: 3px solid #ef4444; }
+        .theme-card.bullish { border-left: 3px solid #22c55e; }
+        .theme-card.neutral { border-left: 3px solid #475569; }
+        .theme-title { font-size: .85rem; font-weight: 700; margin-bottom: .35rem; }
+        .theme-desc { font-size: .78rem; color: #94a3b8; line-height: 1.5; margin-bottom: .5rem; }
+        .theme-tickers { display: flex; flex-wrap: wrap; gap: 4px; }
+        .theme-ticker {
+            font-size: .68rem; font-weight: 600; padding: 2px 7px; border-radius: 4px;
+            background: #1e293b; color: #94a3b8;
+        }
+
+        /* ── priority list ── */
+        .priority-item {
+            background: #0f172a; border: 1px solid #1e293b; border-radius: 12px;
+            padding: .9rem 1.1rem; margin-bottom: .5rem;
+            display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+        }
+        .priority-item.urgency-high   { border-left: 3px solid #ef4444; }
+        .priority-item.urgency-medium { border-left: 3px solid #f59e0b; }
+        .priority-item.urgency-low    { border-left: 3px solid #334155; }
+
+        .priority-ticker { font-size: 1rem; font-weight: 700; min-width: 60px; }
+        .priority-label  { font-size: .72rem; font-weight: 600; min-width: 80px; }
+        .priority-label.urgency-high   { color: #f87171; }
+        .priority-label.urgency-medium { color: #fbbf24; }
+        .priority-label.urgency-low    { color: #475569; }
+
+        .priority-reason { font-size: .78rem; color: #94a3b8; flex: 1; }
+        .priority-meta   { display: flex; align-items: center; gap: .5rem; margin-left: auto; flex-shrink: 0; }
+
+        .sent-pill {
+            font-size: .65rem; padding: 2px 7px; border-radius: 10px; font-weight: 600;
+        }
+        .sent-bull { background: #14532d33; color: #4ade80; }
+        .sent-bear { background: #7f1d1d33; color: #f87171; }
+        .sent-neut { background: #1e293b; color: #64748b; }
+
+        .pct-change { font-size: .8rem; font-weight: 600; min-width: 55px; text-align: right; }
+        .pct-pos { color: #4ade80; }
+        .pct-neg { color: #f87171; }
+        .pct-neu { color: #64748b; }
+
+        .detail-btn {
+            font-size: .7rem; padding: 3px 10px; border-radius: 8px;
+            background: transparent; border: 1px solid #334155; color: #64748b;
+            cursor: pointer; white-space: nowrap;
+        }
+        .detail-btn:hover { background: #1e293b; color: #e2e8f0; }
+
+        /* ── article drawer ── */
+        .article-drawer {
+            display: none; background: #060c1a; border: 1px solid #1e293b;
+            border-top: none; border-radius: 0 0 12px 12px;
+            padding: .75rem 1.1rem; margin-top: -8px; margin-bottom: .5rem;
+        }
+        .article-drawer.open { display: block; }
+        .article-item { padding: .5rem 0; border-bottom: 1px solid #1a2744; }
+        .article-item:last-child { border-bottom: none; }
+        .article-title { font-size: .8rem; font-weight: 500; margin-bottom: .25rem; }
+        .article-title a { color: #93c5fd; text-decoration: none; }
+        .article-title a:hover { text-decoration: underline; }
+        .article-summary { font-size: .75rem; color: #64748b; line-height: 1.5; }
+
+        /* ── portfolio prices (no-news section) ── */
+        .price-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: .5rem;
+        }
+        .price-chip {
+            background: #0f172a; border: 1px solid #1e293b; border-radius: 10px;
+            padding: .6rem .9rem; display: flex; justify-content: space-between; align-items: center;
+        }
+        .price-chip-ticker { font-size: .82rem; font-weight: 700; }
+        .price-chip-chg { font-size: .78rem; font-weight: 600; }
+
+        /* ── loading / error ── */
+        .state-box {
+            text-align: center; padding: 4rem 2rem; color: #475569;
+        }
+        .spinner { width: 32px; height: 32px; border: 3px solid #1e293b;
+            border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite;
+            margin: 0 auto 1rem; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .retry-note { font-size: .8rem; margin-top: .5rem; }
+    </style>
+</head>
+<body>
+
+<nav class="top-nav">
+    <div class="nav-links">
+        <a href="/" class="nav-link-item">Home</a>
+        <a href="/pe_history.html" class="nav-link-item">PE History</a>
+        <a href="/brief.html" class="nav-link-item active">Daily Brief</a>
+    </div>
+    <button class="regen-btn" id="regenBtn">↺ 重新生成</button>
+</nav>
+
+<div class="page" id="app">
+    <div class="state-box">
+        <div class="spinner"></div>
+        <div>載入中…</div>
+    </div>
+</div>
+
+<script src="/jquery.min.js"></script>
+<script src="config.js"></script>
+<script>
+const POLL_INTERVAL = 15000; // 15s when generating
+let pollTimer = null;
+
+function pctClass(v) {
+    if (v === null || v === undefined) return 'pct-neu';
+    return v > 0 ? 'pct-pos' : v < 0 ? 'pct-neg' : 'pct-neu';
+}
+function pctStr(v) {
+    if (v === null || v === undefined) return '—';
+    return (v > 0 ? '+' : '') + v.toFixed(2) + '%';
+}
+function sentBadge(b, be, n) {
+    let html = '';
+    if (b > 0)  html += `<span class="sent-pill sent-bull">🟢 ${b}</span>`;
+    if (be > 0) html += `<span class="sent-pill sent-bear">🔴 ${be}</span>`;
+    if (n > 0)  html += `<span class="sent-pill sent-neut">⚪ ${n}</span>`;
+    return html;
+}
+
+function renderGenerating() {
+    $('#app').html(`
+        <div class="state-box">
+            <div class="spinner"></div>
+            <div>正在生成今日簡報（約 30 秒）…</div>
+            <div class="retry-note">頁面將自動更新</div>
+        </div>
+    `);
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(loadBrief, POLL_INTERVAL);
+}
+
+function renderError(msg) {
+    $('#app').html(`
+        <div class="state-box">
+            <div style="font-size:2rem;margin-bottom:.5rem">⚠️</div>
+            <div>${msg}</div>
+            <button class="regen-btn mt-3" onclick="triggerRegen()">重試</button>
+        </div>
+    `);
+}
+
+function formatDate(iso) {
+    const d = new Date(iso);
+    return d.toLocaleDateString('zh-TW', {year:'numeric', month:'long', day:'numeric'});
+}
+function formatTime(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleTimeString('zh-TW', {hour:'2-digit', minute:'2-digit'});
+}
+
+function renderBrief(data) {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+
+    const sentLabel = {bearish: '看空', bullish: '看多', neutral: '中性'};
+    const sentClass = data.market_sentiment || 'neutral';
+
+    // ── themes ──
+    const themeSentIcon = {bearish:'🔴', bullish:'🟢', neutral:'⚪'};
+    const themesHtml = (data.themes || []).map(t => `
+        <div class="theme-card ${t.sentiment || 'neutral'}">
+            <div class="theme-title">${themeSentIcon[t.sentiment]||'⚪'} ${t.title}</div>
+            <div class="theme-desc">${t.description}</div>
+            <div class="theme-tickers">
+                ${(t.tickers||[]).map(tk => `<span class="theme-ticker">${tk}</span>`).join('')}
+            </div>
+        </div>
+    `).join('');
+
+    // ── priorities ──
+    const prioritiesHtml = (data.priorities || []).map((p, i) => {
+        const pc = p.price_change;
+        return `
+        <div>
+            <div class="priority-item urgency-${p.urgency}" id="pi-${i}">
+                <div class="priority-ticker">${p.ticker}</div>
+                <div class="priority-label urgency-${p.urgency}">${p.urgency_label}</div>
+                <div class="priority-reason">${p.reason || ''}</div>
+                <div class="priority-meta">
+                    ${sentBadge(p.bullish, p.bearish, p.neutral)}
+                    <span class="pct-change ${pctClass(pc)}">${pctStr(pc)}</span>
+                    <button class="detail-btn" onclick="toggleDrawer(${i})">詳細 ▾</button>
+                </div>
+            </div>
+            <div class="article-drawer" id="drawer-${i}">
+                ${renderArticles(data.ticker_details?.[p.ticker]?.articles || [])}
+            </div>
+        </div>`;
+    }).join('');
+
+    // ── portfolio prices (no news) ──
+    const ppEntries = Object.entries(data.portfolio_prices || {})
+        .sort((a, b) => (Math.abs(b[1].price_change)||0) - (Math.abs(a[1].price_change)||0));
+    const ppHtml = ppEntries.length ? `
+        <div class="section">
+            <div class="section-label">其他持倉今日漲跌</div>
+            <div class="price-grid">
+                ${ppEntries.map(([t, v]) => `
+                    <div class="price-chip">
+                        <span class="price-chip-ticker">${t}</span>
+                        <span class="price-chip-chg ${pctClass(v.price_change)}">${pctStr(v.price_change)}</span>
+                    </div>
+                `).join('')}
+            </div>
+        </div>` : '';
+
+    // ── market summary paragraphs ──
+    const summaryHtml = (data.market_summary || '')
+        .split(/\n+/).filter(s => s.trim())
+        .map(s => `<p>${s.trim()}</p>`).join('');
+
+    $('#app').html(`
+        <div class="brief-header">
+            <div class="brief-date">${formatDate(data.date)}</div>
+            <div class="brief-title">每日市場情報簡報</div>
+            <div class="meta-row">
+                <span class="meta-badge ${sentClass}">${sentLabel[sentClass] || '中性'}</span>
+                <span class="meta-time">生成於 ${formatTime(data.generated_at)}</span>
+                <span class="meta-time">· 涵蓋 ${data.news_count || 0} 篇新聞 / ${(data.tickers_covered||[]).length} 支股票</span>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-label">市場環境</div>
+            <div class="market-card">${summaryHtml || '<p>無資料</p>'}</div>
+        </div>
+
+        ${data.ai_second_opinion ? `
+        <div class="section">
+            <div class="section-label">AI 第二意見</div>
+            <div class="opinion-card">
+                <div class="opinion-icon">🤖</div>
+                <div class="opinion-text">${data.ai_second_opinion}</div>
+            </div>
+        </div>` : ''}
+
+        ${themesHtml ? `
+        <div class="section">
+            <div class="section-label">今日主題</div>
+            <div class="themes-grid">${themesHtml}</div>
+        </div>` : ''}
+
+        ${prioritiesHtml ? `
+        <div class="section">
+            <div class="section-label">持倉優先關注（點「詳細」展開新聞）</div>
+            ${prioritiesHtml}
+        </div>` : ''}
+
+        ${ppHtml}
+    `);
+}
+
+function renderArticles(articles) {
+    if (!articles || !articles.length) return '<div style="color:#475569;font-size:.8rem;padding:.5rem 0">無文章內容</div>';
+    return articles.map(a => {
+        const sentIcon = {bullish:'🟢', bearish:'🔴', neutral:'⚪'}[a.sentiment] || '⚪';
+        const titleHtml = a.url
+            ? `<a href="${a.url}" target="_blank" rel="noopener">${sentIcon} ${a.title}</a>`
+            : `${sentIcon} ${a.title}`;
+        return `
+            <div class="article-item">
+                <div class="article-title">${titleHtml}</div>
+                ${a.summary ? `<div class="article-summary">${a.summary}</div>` : ''}
+            </div>`;
+    }).join('');
+}
+
+function toggleDrawer(i) {
+    const drawer = $(`#drawer-${i}`);
+    const btn = $(`#pi-${i} .detail-btn`);
+    if (drawer.hasClass('open')) {
+        drawer.removeClass('open');
+        btn.text('詳細 ▾');
+    } else {
+        drawer.addClass('open');
+        btn.text('收起 ▴');
+    }
+}
+
+async function loadBrief() {
+    try {
+        const res = await fetch(`${API_BASE_URL}/api/brief`);
+        if (res.status === 202) {
+            renderGenerating();
+            return;
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (data.status === 'generating') { renderGenerating(); return; }
+        renderBrief(data);
+    } catch (e) {
+        renderError(`載入失敗：${e.message}`);
+    }
+}
+
+async function triggerRegen() {
+    $('#regenBtn').text('生成中…').prop('disabled', true);
+    try {
+        await fetch(`${API_BASE_URL}/api/brief/regenerate`, { method: 'POST' });
+        renderGenerating();
+    } catch(e) {
+        renderError('重新生成請求失敗');
+    } finally {
+        setTimeout(() => {
+            $('#regenBtn').text('↺ 重新生成').prop('disabled', false);
+        }, 3000);
+    }
+}
+
+$('#regenBtn').on('click', triggerRegen);
+loadBrief();
+</script>
+</body>
+</html>

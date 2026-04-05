@@ -756,5 +756,56 @@ def get_gics_overview(period: str = "1D"):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/brief")
+def get_brief():
+    """
+    Returns the daily intelligence brief as JSON.
+    Serves cached /tmp/brief_{date}.json if fresh (< 2h).
+    Returns 202 with {status: 'generating'} if not yet available.
+    """
+    import datetime, time, subprocess, sys
+    from pathlib import Path
+
+    today = datetime.date.today().isoformat()
+    cache = Path(f"/tmp/brief_{today}.json")
+
+    if cache.exists():
+        age = time.time() - cache.stat().st_mtime
+        if age < 7200:
+            import json as _json
+            return _json.loads(cache.read_text())
+
+    # Not cached — trigger background generation and return 202
+    script = Path(__file__).parent / "generate_brief.py"
+    subprocess.Popen(
+        [sys.executable, str(script), "--force"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=202, content={
+        "status": "generating",
+        "message": "Brief is being generated, retry in 30 seconds."
+    })
+
+
+@app.post("/api/brief/regenerate")
+def regenerate_brief():
+    """Force regenerate today's brief (clears cache)."""
+    import datetime, subprocess, sys
+    from pathlib import Path
+
+    today = datetime.date.today().isoformat()
+    cache = Path(f"/tmp/brief_{today}.json")
+    if cache.exists():
+        cache.unlink()
+
+    script = Path(__file__).parent / "generate_brief.py"
+    subprocess.Popen(
+        [sys.executable, str(script), "--force"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
+    return {"status": "generating", "message": "Regenerating brief in background."}
+
+
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
