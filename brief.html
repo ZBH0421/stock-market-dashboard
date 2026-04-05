@@ -187,6 +187,23 @@
 const POLL_INTERVAL = 15000; // 15s when generating
 let pollTimer = null;
 
+function esc(s) {
+    if (!s) return '';
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+function safeUrl(u) {
+    // Bug fix #3: block javascript: and data: URLs
+    if (!u) return '#';
+    const trimmed = String(u).trim().toLowerCase();
+    if (trimmed.startsWith('javascript:') || trimmed.startsWith('data:')) return '#';
+    return u;
+}
+
 function pctClass(v) {
     if (v === null || v === undefined) return 'pct-neu';
     return v > 0 ? 'pct-pos' : v < 0 ? 'pct-neg' : 'pct-neu';
@@ -243,15 +260,18 @@ function renderBrief(data) {
 
     // ── themes ──
     const themeSentIcon = {bearish:'🔴', bullish:'🟢', neutral:'⚪'};
-    const themesHtml = (data.themes || []).map(t => `
-        <div class="theme-card ${t.sentiment || 'neutral'}">
-            <div class="theme-title">${themeSentIcon[t.sentiment]||'⚪'} ${t.title}</div>
-            <div class="theme-desc">${t.description}</div>
+    const VALID_SENT = new Set(['bearish','bullish','neutral']);
+    const themesHtml = (data.themes || []).map(t => {
+        const tSent = VALID_SENT.has(t.sentiment) ? t.sentiment : 'neutral';
+        return `
+        <div class="theme-card ${tSent}">
+            <div class="theme-title">${themeSentIcon[tSent]||'⚪'} ${esc(t.title)}</div>
+            <div class="theme-desc">${esc(t.description)}</div>
             <div class="theme-tickers">
-                ${(t.tickers||[]).map(tk => `<span class="theme-ticker">${tk}</span>`).join('')}
+                ${(t.tickers||[]).map(tk => `<span class="theme-ticker">${esc(tk)}</span>`).join('')}
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 
     // ── priorities ──
     const prioritiesHtml = (data.priorities || []).map((p, i) => {
@@ -261,7 +281,7 @@ function renderBrief(data) {
             <div class="priority-item urgency-${p.urgency}" id="pi-${i}">
                 <div class="priority-ticker">${p.ticker}</div>
                 <div class="priority-label urgency-${p.urgency}">${p.urgency_label}</div>
-                <div class="priority-reason">${p.reason || ''}</div>
+                <div class="priority-reason">${esc(p.reason) || ''}</div>
                 <div class="priority-meta">
                     ${sentBadge(p.bullish, p.bearish, p.neutral)}
                     <span class="pct-change ${pctClass(pc)}">${pctStr(pc)}</span>
@@ -293,7 +313,7 @@ function renderBrief(data) {
     // ── market summary paragraphs ──
     const summaryHtml = (data.market_summary || '')
         .split(/\n+/).filter(s => s.trim())
-        .map(s => `<p>${s.trim()}</p>`).join('');
+        .map(s => `<p>${esc(s.trim())}</p>`).join('');
 
     $('#app').html(`
         <div class="brief-header">
@@ -317,7 +337,7 @@ function renderBrief(data) {
             <div class="section-label">AI 第二意見</div>
             <div class="opinion-card">
                 <div class="opinion-icon">🤖</div>
-                <div class="opinion-text">${data.ai_second_opinion}</div>
+                <div class="opinion-text">${esc(data.ai_second_opinion)}</div>
             </div>
         </div>` : ''}
 
@@ -342,12 +362,12 @@ function renderArticles(articles) {
     return articles.map(a => {
         const sentIcon = {bullish:'🟢', bearish:'🔴', neutral:'⚪'}[a.sentiment] || '⚪';
         const titleHtml = a.url
-            ? `<a href="${a.url}" target="_blank" rel="noopener">${sentIcon} ${a.title}</a>`
-            : `${sentIcon} ${a.title}`;
+            ? `<a href="${safeUrl(a.url)}" target="_blank" rel="noopener">${sentIcon} ${esc(a.title)}</a>`
+            : `${sentIcon} ${esc(a.title)}`;
         return `
             <div class="article-item">
                 <div class="article-title">${titleHtml}</div>
-                ${a.summary ? `<div class="article-summary">${a.summary}</div>` : ''}
+                ${a.summary ? `<div class="article-summary">${esc(a.summary)}</div>` : ''}
             </div>`;
     }).join('');
 }

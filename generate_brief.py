@@ -156,9 +156,14 @@ def fetch_price_changes(tickers: list[str]) -> dict[str, float]:
         return {}
     try:
         import yfinance as yf
-        data = yf.download(tickers, period="2d", auto_adjust=True, progress=False)["Close"]
-        pct = data.pct_change().iloc[-1] * 100
-        return {str(t): round(float(v), 2) for t, v in pct.items() if str(v) != "nan"}
+        import pandas as pd
+        raw = yf.download(tickers, period="2d", auto_adjust=True, progress=False)["Close"]
+        # Bug fix #1: single ticker returns Series with date index, not DataFrame
+        if isinstance(raw, pd.Series):
+            raw = raw.to_frame(name=tickers[0] if len(tickers) == 1 else "unknown")
+        pct = raw.pct_change().iloc[-1] * 100
+        return {str(t): round(float(v), 2) for t, v in pct.items()
+                if v == v and str(v) != "nan"}  # NaN check
     except Exception as e:
         print(f"  [!] yfinance error: {e}")
         return {}
@@ -186,7 +191,8 @@ def build_ticker_stats(entries: list[dict]) -> dict[str, dict]:
 
 
 def score_urgency(ticker: str, stat: dict, price_chg: float | None,
-                  portfolio_map: dict) -> tuple[str, str, str]:
+                  portfolio_map: dict,
+                  price_label: str = "今日") -> tuple[str, str, str]:
     """Returns (urgency_level, urgency_label, reason)."""
     total = stat["bullish"] + stat["bearish"] + stat["neutral"]
     bear_ratio = stat["bearish"] / total if total else 0
@@ -201,13 +207,13 @@ def score_urgency(ticker: str, stat: dict, price_chg: float | None,
 
     if price_chg is not None:
         if price_chg <= -5:
-            reasons.append(f"今日大跌 {price_chg:+.1f}%")
+            reasons.append(f"{price_label}大跌 {price_chg:+.1f}%")
             score += 3
         elif price_chg <= -2:
-            reasons.append(f"今日下跌 {price_chg:+.1f}%")
+            reasons.append(f"{price_label}下跌 {price_chg:+.1f}%")
             score += 1
         elif price_chg >= 5:
-            reasons.append(f"今日大漲 {price_chg:+.1f}%")
+            reasons.append(f"{price_label}大漲 {price_chg:+.1f}%")
             score += 1
 
     if bear_ratio >= 0.6 and total >= 3:
@@ -237,23 +243,41 @@ def score_urgency(ticker: str, stat: dict, price_chg: float | None,
 
 
 def build_news_digest_for_llm(ticker_stats: dict, price_changes: dict,
-                               portfolio_map: dict) -> str:
-    """Build a compact text digest to feed into LLM."""
+                               portfolio_map: dict,
+                               max_chars: int = 4000) -> str:
+    """
+    Build a compact text digest for the LLM.
+    Caps total length to stay within Groq TPM limits (~6000 tokens free tier).
+    Prioritises tickers with more bearish/bullish signal over neutral-heavy ones.
+    """
+    # Sort tickers by signal strength (bearish + bullish first)
+    def signal(stat): return stat["bearish"] + stat["bullish"]
+    sorted_tickers = sorted(ticker_stats.items(), key=lambda x: signal(x[1]), reverse=True)
+
     lines = []
-    for ticker, stat in ticker_stats.items():
+    total_chars = 0
+    for ticker, stat in sorted_tickers:
         pc = price_changes.get(ticker)
         pc_str = f"{pc:+.1f}%" if pc is not None else "N/A"
         cost = portfolio_map.get(ticker, {}).get("cost_price")
         cost_str = f"成本${cost:.2f}" if cost else ""
-        lines.append(
-            f"\n【{ticker}】今日{pc_str} {cost_str} "
+        header = (
+            f"\n【{ticker}】{pc_str} {cost_str} "
             f"| 看多{stat['bullish']} 看空{stat['bearish']} 中性{stat['neutral']}"
         )
-        for a in stat["articles"][:4]:
+        ticker_lines = [header]
+        for a in stat["articles"][:3]:  # max 3 articles per ticker
             sent_tag = {"bullish": "🟢", "bearish": "🔴", "neutral": "⚪"}.get(a["sentiment"], "⚪")
-            lines.append(f"  {sent_tag} {a['title'][:80]}")
+            ticker_lines.append(f"  {sent_tag} {a['title'][:70]}")
             if a.get("summary"):
-                lines.append(f"     摘要：{a['summary'][:120]}")
+                ticker_lines.append(f"     {a['summary'][:100]}")
+
+        chunk = "\n".join(ticker_lines)
+        if total_chars + len(chunk) > max_chars:
+            break
+        lines.append(chunk)
+        total_chars += len(chunk)
+
     return "\n".join(lines)
 
 
@@ -301,11 +325,19 @@ themes 請提取 2-4 個跨股票的主題。ai_second_opinion 要直接、具�
         }
 
 
+def _atomic_write(path: Path, content: str) -> None:
+    """Write to a temp file then rename — atomic on Linux."""
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(content, encoding="utf-8")
+    tmp.rename(path)
+
+
 # ── main ───────────────────────────────────────────────────────────────────
 def generate(force: bool = False) -> Path:
     today, entries, data_label = load_today_news()
     # Cache always uses calendar date so API can find it reliably
     cache_path = CACHE_DIR / f"brief_{today}.json"
+    lock_path  = CACHE_DIR / f"brief_{today}.lock"
 
     if not force and cache_path.exists():
         age = time.time() - cache_path.stat().st_mtime
@@ -313,105 +345,132 @@ def generate(force: bool = False) -> Path:
             print(f"[brief] Using cached brief ({age/60:.0f} min old): {cache_path}")
             return cache_path
 
+    # Bug fix #4: prevent concurrent generation with a lock file
+    if lock_path.exists():
+        lock_age = time.time() - lock_path.stat().st_mtime
+        if lock_age < 300:  # another process started < 5 min ago
+            print(f"[brief] Another generation in progress (lock age {lock_age:.0f}s), skipping.")
+            return cache_path if cache_path.exists() else cache_path
+    lock_path.touch()
+
     print(f"[brief] Generating brief for {today} / data: {data_label} ({len(entries)} news entries)...")
 
-    portfolio = load_portfolio()
-    portfolio_map = {p["ticker"]: p for p in portfolio}
+    try:
+        portfolio = load_portfolio()
+        portfolio_map = {p["ticker"]: p for p in portfolio}
 
-    if not entries:
-        brief = {
-            "date": today,
-            "data_label": data_label,
-            "generated_at": datetime.datetime.now().isoformat(),
-            "market_summary": "今日尚無新聞資料。",
-            "market_sentiment": "neutral",
-            "themes": [],
-            "ai_second_opinion": "",
-            "priorities": [],
-            "ticker_details": {},
-            "price_changes": {},
-        }
-        cache_path.write_text(json.dumps(brief, ensure_ascii=False, indent=2))
-        return cache_path
+        if not entries:
+            brief = {
+                "date": today, "data_label": data_label,
+                "generated_at": datetime.datetime.now().isoformat(),
+                "market_summary": "今日尚無新聞資料。",
+                "market_sentiment": "neutral", "themes": [],
+                "ai_second_opinion": "", "priorities": [],
+                "ticker_details": {}, "price_changes": {},
+            }
+            _atomic_write(cache_path, json.dumps(brief, ensure_ascii=False, indent=2))
+            return cache_path
 
-    ticker_stats = build_ticker_stats(entries)
-    news_tickers = list(ticker_stats.keys())
+        ticker_stats = build_ticker_stats(entries)
+        news_tickers = list(ticker_stats.keys())
 
-    # All portfolio tickers for price fetch
-    all_tickers = list(set(news_tickers + [p["ticker"] for p in portfolio]))
-    print(f"[brief] Fetching prices for {len(all_tickers)} tickers...")
-    price_changes = fetch_price_changes(all_tickers)
+        all_tickers = list(set(news_tickers + [p["ticker"] for p in portfolio]))
+        print(f"[brief] Fetching prices for {len(all_tickers)} tickers...")
+        price_changes = fetch_price_changes(all_tickers)
 
-    # LLM brief
-    print(f"[brief] Calling LLM ({GROQ_MODEL})...")
-    digest = build_news_digest_for_llm(ticker_stats, price_changes, portfolio_map)
-    llm_data = generate_llm_brief(digest, data_label)
+        print(f"[brief] Calling LLM ({GROQ_MODEL})...")
+        digest = build_news_digest_for_llm(ticker_stats, price_changes, portfolio_map)
+        llm_data = generate_llm_brief(digest, data_label)
 
-    # Build priority list
-    priorities = []
-    for ticker, stat in ticker_stats.items():
-        pc = price_changes.get(ticker)
-        urgency, label, reason = score_urgency(ticker, stat, pc, portfolio_map)
-        total = stat["bullish"] + stat["bearish"] + stat["neutral"]
-        priorities.append({
-            "ticker":       ticker,
-            "urgency":      urgency,
-            "urgency_label": label,
-            "reason":       reason,
-            "news_count":   total,
-            "bullish":      stat["bullish"],
-            "bearish":      stat["bearish"],
-            "neutral":      stat["neutral"],
-            "price_change": pc,
-        })
-    # Sort: high → medium → low, then by bearish count desc
-    order = {"high": 0, "medium": 1, "low": 2}
-    priorities.sort(key=lambda x: (order[x["urgency"]], -x["bearish"]))
+        # Bug fix #5: label price changes correctly on weekends
+        is_weekend = datetime.date.today().weekday() in (5, 6)
+        price_change_label = "上週五" if is_weekend else "今日"
 
-    # Build ticker details (for expandable section)
-    ticker_details = {}
-    for ticker, stat in ticker_stats.items():
-        ticker_details[ticker] = {
-            "bullish":      stat["bullish"],
-            "bearish":      stat["bearish"],
-            "neutral":      stat["neutral"],
-            "price_change": price_changes.get(ticker),
-            "cost_price":   portfolio_map.get(ticker, {}).get("cost_price"),
-            "shares":       portfolio_map.get(ticker, {}).get("shares"),
-            "articles":     stat["articles"],
-        }
+        # Build priority list
+        priorities = []
+        for ticker, stat in ticker_stats.items():
+            pc = price_changes.get(ticker)
+            urgency, lbl, reason = score_urgency(
+                ticker, stat, pc, portfolio_map, price_change_label
+            )
+            total = stat["bullish"] + stat["bearish"] + stat["neutral"]
+            priorities.append({
+                "ticker": ticker, "urgency": urgency,
+                "urgency_label": lbl, "reason": reason,
+                "news_count": total, "bullish": stat["bullish"],
+                "bearish": stat["bearish"], "neutral": stat["neutral"],
+                "price_change": pc,
+            })
+        order = {"high": 0, "medium": 1, "low": 2}
+        priorities.sort(key=lambda x: (order[x["urgency"]], -x["bearish"]))
 
-    # Portfolio positions NOT in today's news (for price-only view)
-    portfolio_prices = {}
-    for p in portfolio:
-        t = p["ticker"]
-        if t not in ticker_details and t in price_changes:
-            portfolio_prices[t] = {
-                "price_change": price_changes[t],
-                "cost_price":   p.get("cost_price"),
-                "shares":       p.get("shares"),
-                "name":         p.get("name", t),
+        ticker_details = {}
+        for ticker, stat in ticker_stats.items():
+            ticker_details[ticker] = {
+                "bullish": stat["bullish"], "bearish": stat["bearish"],
+                "neutral": stat["neutral"],
+                "price_change": price_changes.get(ticker),
+                "cost_price": portfolio_map.get(ticker, {}).get("cost_price"),
+                "shares": portfolio_map.get(ticker, {}).get("shares"),
+                "articles": stat["articles"],
             }
 
-    brief = {
-        "date":            today,
-        "data_label":      data_label,
-        "generated_at":    datetime.datetime.now().isoformat(),
-        "news_count":      len(entries),
-        "tickers_covered": news_tickers,
-        "market_summary":  llm_data.get("market_summary", ""),
-        "market_sentiment": llm_data.get("market_sentiment", "neutral"),
-        "themes":          llm_data.get("themes", []),
-        "ai_second_opinion": llm_data.get("ai_second_opinion", ""),
-        "priorities":      priorities,
-        "ticker_details":  ticker_details,
-        "portfolio_prices": portfolio_prices,
-        "price_changes":   price_changes,
-    }
+        portfolio_prices = {}
+        for p in portfolio:
+            t = p["ticker"]
+            if t not in ticker_details and t in price_changes:
+                portfolio_prices[t] = {
+                    "price_change": price_changes[t],
+                    "cost_price": p.get("cost_price"),
+                    "shares": p.get("shares"),
+                    "name": p.get("name", t),
+                }
 
-    cache_path.write_text(json.dumps(brief, ensure_ascii=False, indent=2))
-    print(f"[brief] Saved to {cache_path}")
-    return cache_path
+        # Bug fix #7: normalise market_sentiment to valid values only
+        raw_sent = llm_data.get("market_sentiment", "neutral")
+        sentiment = raw_sent if raw_sent in ("bearish", "bullish", "neutral") else "neutral"
+
+        brief = {
+            "date":            today,
+            "data_label":      data_label,
+            "generated_at":    datetime.datetime.now().isoformat(),
+            "news_count":      len(entries),
+            "tickers_covered": news_tickers,
+            "market_summary":  llm_data.get("market_summary", ""),
+            "market_sentiment": sentiment,
+            "themes":          llm_data.get("themes", []),
+            "ai_second_opinion": llm_data.get("ai_second_opinion", ""),
+            "priorities":      priorities,
+            "ticker_details":  ticker_details,
+            "portfolio_prices": portfolio_prices,
+            "price_changes":   price_changes,
+        }
+
+        # Bug fix #2: atomic write
+        _atomic_write(cache_path, json.dumps(brief, ensure_ascii=False, indent=2))
+        print(f"[brief] Saved to {cache_path}")
+        return cache_path
+
+    except Exception as e:
+        # Bug fix #6: write error cache so API stops retrying indefinitely
+        print(f"[brief] Generation failed: {e}")
+        import traceback; traceback.print_exc()
+        error_brief = {
+            "date": today, "data_label": data_label,
+            "generated_at": datetime.datetime.now().isoformat(),
+            "error": str(e),
+            "market_summary": f"簡報生成失敗：{e}",
+            "market_sentiment": "neutral", "themes": [],
+            "ai_second_opinion": "", "priorities": [],
+            "ticker_details": {}, "price_changes": {}, "news_count": 0,
+            "tickers_covered": [],
+        }
+        _atomic_write(cache_path, json.dumps(error_brief, ensure_ascii=False, indent=2))
+        return cache_path
+
+    finally:
+        # Bug fix #4: always release the lock
+        lock_path.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

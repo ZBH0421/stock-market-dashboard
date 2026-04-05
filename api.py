@@ -773,7 +773,11 @@ def get_brief():
         age = time.time() - cache.stat().st_mtime
         if age < 7200:
             import json as _json
-            return _json.loads(cache.read_text())
+            try:
+                return _json.loads(cache.read_text())
+            except (ValueError, OSError):
+                # Bug fix #2: corrupted cache — delete and fall through to regenerate
+                cache.unlink(missing_ok=True)
 
     # Not cached — trigger background generation and return 202
     script = Path(__file__).parent / "generate_brief.py"
