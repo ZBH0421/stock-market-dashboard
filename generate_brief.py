@@ -72,18 +72,76 @@ def call_groq(prompt: str, max_tokens: int = 4000) -> str:
 
 
 # ── data loaders ───────────────────────────────────────────────────────────
-def load_today_news() -> tuple[str, list[dict]]:
-    """Returns (date_str, entries_list)."""
+def load_today_news() -> tuple[str, list[dict], str]:
+    """
+    Returns (calendar_date, entries_list, data_label).
+
+    Weekend logic:
+      - Mon–Fri: use today's news only (fall back to latest if not yet available)
+      - Sat: merge Fri + Sat
+      - Sun: merge Fri + Sat + Sun
+    data_label describes the actual date range shown (for display).
+    """
+    calendar_today = datetime.date.today()
+    calendar_str   = calendar_today.isoformat()
+    weekday = calendar_today.weekday()  # 0=Mon, 5=Sat, 6=Sun
+
     if not DAILY_LOG.exists():
-        return datetime.date.today().isoformat(), []
+        return calendar_str, [], calendar_str
+
     log = json.loads(DAILY_LOG.read_text())
-    today = datetime.date.today().isoformat()
-    # Fall back to latest date if today has no data yet
-    entries = log.get(today, [])
+
+    # Weekend: collect since last Friday
+    if weekday in (5, 6):  # Sat or Sun
+        # Find last Friday
+        days_since_fri = weekday - 4  # Sat→1, Sun→2
+        last_friday = calendar_today - datetime.timedelta(days=days_since_fri)
+        collect_dates = []
+        d = last_friday
+        while d <= calendar_today:
+            collect_dates.append(d.isoformat())
+            d += datetime.timedelta(days=1)
+
+        entries = []
+        actual_dates = []
+        for ds in collect_dates:
+            day_entries = log.get(ds, [])
+            if day_entries:
+                entries.extend(day_entries)
+                actual_dates.append(ds)
+
+        if not entries and log:
+            # No weekend data at all — use latest available
+            latest = sorted(log.keys())[-1]
+            entries = log[latest]
+            actual_dates = [latest]
+
+        # Deduplicate by title
+        seen = set()
+        deduped = []
+        for e in entries:
+            key = e.get("title", "")
+            if key not in seen:
+                seen.add(key)
+                deduped.append(e)
+
+        if len(actual_dates) > 1:
+            label = f"週末彙整（{actual_dates[0]} 至 {actual_dates[-1]}）"
+        elif actual_dates:
+            label = actual_dates[0]
+        else:
+            label = calendar_str
+
+        return calendar_str, deduped, label
+
+    # Weekday: today only, fall back to latest if today not yet populated
+    entries = log.get(calendar_str, [])
     if not entries and log:
-        today = sorted(log.keys())[-1]
-        entries = log[today]
-    return today, entries
+        latest = sorted(log.keys())[-1]
+        entries = log[latest]
+        return calendar_str, entries, f"{latest}（最新）"
+
+    return calendar_str, entries, calendar_str
 
 
 def load_portfolio() -> list[dict]:
@@ -245,7 +303,8 @@ themes 請提取 2-4 個跨股票的主題。ai_second_opinion 要直接、具�
 
 # ── main ───────────────────────────────────────────────────────────────────
 def generate(force: bool = False) -> Path:
-    today, entries = load_today_news()
+    today, entries, data_label = load_today_news()
+    # Cache always uses calendar date so API can find it reliably
     cache_path = CACHE_DIR / f"brief_{today}.json"
 
     if not force and cache_path.exists():
@@ -254,7 +313,7 @@ def generate(force: bool = False) -> Path:
             print(f"[brief] Using cached brief ({age/60:.0f} min old): {cache_path}")
             return cache_path
 
-    print(f"[brief] Generating brief for {today} ({len(entries)} news entries)...")
+    print(f"[brief] Generating brief for {today} / data: {data_label} ({len(entries)} news entries)...")
 
     portfolio = load_portfolio()
     portfolio_map = {p["ticker"]: p for p in portfolio}
@@ -262,6 +321,7 @@ def generate(force: bool = False) -> Path:
     if not entries:
         brief = {
             "date": today,
+            "data_label": data_label,
             "generated_at": datetime.datetime.now().isoformat(),
             "market_summary": "今日尚無新聞資料。",
             "market_sentiment": "neutral",
@@ -285,7 +345,7 @@ def generate(force: bool = False) -> Path:
     # LLM brief
     print(f"[brief] Calling LLM ({GROQ_MODEL})...")
     digest = build_news_digest_for_llm(ticker_stats, price_changes, portfolio_map)
-    llm_data = generate_llm_brief(digest, today)
+    llm_data = generate_llm_brief(digest, data_label)
 
     # Build priority list
     priorities = []
@@ -335,6 +395,7 @@ def generate(force: bool = False) -> Path:
 
     brief = {
         "date":            today,
+        "data_label":      data_label,
         "generated_at":    datetime.datetime.now().isoformat(),
         "news_count":      len(entries),
         "tickers_covered": news_tickers,

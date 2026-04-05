@@ -301,6 +301,7 @@ function renderBrief(data) {
             <div class="brief-title">每日市場情報簡報</div>
             <div class="meta-row">
                 <span class="meta-badge ${sentClass}">${sentLabel[sentClass] || '中性'}</span>
+                ${data.data_label && data.data_label !== data.date ? `<span class="meta-badge neutral">📅 ${data.data_label}</span>` : ''}
                 <span class="meta-time">生成於 ${formatTime(data.generated_at)}</span>
                 <span class="meta-time">· 涵蓋 ${data.news_count || 0} 篇新聞 / ${(data.tickers_covered||[]).length} 支股票</span>
             </div>
