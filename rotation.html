@@ -82,6 +82,27 @@
         }
 
         .loading-spinner { display: flex; align-items: center; justify-content: center; height: 500px; }
+
+        /* Drill-down breadcrumb */
+        .drill-breadcrumb {
+            display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+            font-size: 0.85rem; color: #64748b; margin-bottom: 8px;
+        }
+        .drill-breadcrumb .drill-sector { color: #fbbf24; font-weight: 600; }
+        .drill-breadcrumb .drill-back {
+            color: #60a5fa; cursor: pointer; text-decoration: none; font-size: 0.8rem;
+            background: #1e3a5f; border: 1px solid #1d4ed8; border-radius: 6px;
+            padding: 2px 10px;
+        }
+        .drill-breadcrumb .drill-back:hover { background: #1d4ed8; color: #fff; }
+
+        /* Benchmark toggle (in control bar) */
+        .benchmark-toggle { display: inline-flex; border: 1px solid #334155; border-radius: 7px; overflow: hidden; }
+        .benchmark-btn {
+            padding: 4px 11px; font-size: 11px; color: #64748b;
+            background: transparent; border: none; cursor: pointer; transition: background .15s;
+        }
+        .benchmark-btn.active { background: #1d4ed8; color: #fff; }
     </style>
 </head>
 <body>
@@ -136,9 +157,22 @@
                 <button class="range-btn active" data-weeks="52">1Y</button>
                 <button class="range-btn" data-weeks="0">全部</button>
             </div>
+
+            <div class="benchmark-toggle" id="benchmarkToggle" style="display:none;">
+                <button class="benchmark-btn active" data-bm="market">vs 全市場</button>
+                <button class="benchmark-btn" data-bm="sector">vs Sector</button>
+            </div>
         </div>
 
-        <!-- Sector visibility toggles -->
+        <!-- Drill-down breadcrumb (shown in industry mode) -->
+        <div class="drill-breadcrumb" id="drillBreadcrumb" style="display:none;">
+            <span>Sector Rotation</span>
+            <span>›</span>
+            <span class="drill-sector" id="drillSectorLabel"></span>
+            <span id="drillBack" class="drill-back">← 返回</span>
+        </div>
+
+        <!-- Sector visibility toggles (shown in sector mode) -->
         <div class="sector-toggles" id="sectorToggles" style="display:none;"></div>
 
         <!-- Chart -->
