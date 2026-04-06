@@ -158,6 +158,22 @@
             </div>
         </div>
 
+        <!-- Sector ETF price chart -->
+        <div class="card mb-4" id="etfChartCard" style="display:none;">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <span>Sector ETF Performance</span>
+                <div class="d-flex gap-1" id="etfRangeBtns">
+                    <button class="range-btn" data-etf-period="3M">3M</button>
+                    <button class="range-btn active" data-etf-period="1Y">1Y</button>
+                    <button class="range-btn" data-etf-period="3Y">3Y</button>
+                    <button class="range-btn" data-etf-period="ALL">全部</button>
+                </div>
+            </div>
+            <div class="card-body p-2">
+                <div id="etfChart"></div>
+            </div>
+        </div>
+
         <!-- Sector ranking table -->
         <div class="card">
             <div class="card-header d-flex align-items-center gap-2">
@@ -482,6 +498,7 @@
                 }
                 if (chart) chart.updateSeries(buildSeries(playSnapshots[currentIdx].sectors), false);
                 drawTrails();
+                renderEtfChart();
             });
             container.appendChild(pill);
         });
@@ -581,7 +598,78 @@
         }
     }
 
+    // ── ETF chart ─────────────────────────────────────────────
+    let etfChart = null;
+    let etfPeriod = '1Y';
+    let etfData = null;
+
+    async function loadEtfChart(period) {
+        etfPeriod = period;
+        const res = await fetch(`/api/sector-etf-prices?period=${period}`);
+        if (!res.ok) return;
+        etfData = await res.json();
+        renderEtfChart();
+    }
+
+    function renderEtfChart() {
+        if (!etfData) return;
+        const series = Object.entries(etfData.sectors)
+            .filter(([sector]) => visibleSectors.has(sector))
+            .map(([sector, d]) => ({
+                name: sector,
+                data: d.dates.map((dt, i) => ({ x: new Date(dt).getTime(), y: d.values[i] })),
+            }));
+
+        const colors = Object.entries(etfData.sectors)
+            .filter(([sector]) => visibleSectors.has(sector))
+            .map(([sector]) => SECTOR_COLORS[sector] || '#94a3b8');
+
+        if (etfChart) {
+            etfChart.updateOptions({ series, colors }, true, false);
+            return;
+        }
+
+        etfChart = new ApexCharts(document.getElementById('etfChart'), {
+            chart: {
+                type: 'line', height: 280, background: '#1e293b',
+                toolbar: { show: false }, animations: { enabled: false },
+                zoom: { enabled: false },
+            },
+            series,
+            colors,
+            stroke: { width: 2, curve: 'smooth' },
+            xaxis: { type: 'datetime', labels: { style: { colors: '#64748b' }, datetimeUTC: false } },
+            yaxis: {
+                labels: {
+                    style: { colors: '#64748b' },
+                    formatter: v => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`,
+                },
+            },
+            tooltip: {
+                theme: 'dark',
+                y: { formatter: v => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%` },
+                x: { format: 'yyyy-MM-dd' },
+            },
+            legend: { show: false },
+            grid: { borderColor: '#334155' },
+            annotations: { yaxis: [{ y: 0, borderColor: '#475569', strokeDashArray: 4 }] },
+            theme: { mode: 'dark' },
+        });
+        etfChart.render();
+        document.getElementById('etfChartCard').style.display = '';
+    }
+
+    // ETF range buttons
+    document.getElementById('etfRangeBtns').addEventListener('click', e => {
+        const btn = e.target.closest('[data-etf-period]');
+        if (!btn) return;
+        document.querySelectorAll('[data-etf-period]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        loadEtfChart(btn.dataset.etfPeriod);
+    });
+
     load();
+    loadEtfChart('1Y');
     </script>
 </body>
 </html>

@@ -1167,5 +1167,77 @@ def get_sector_rotation_history():
     })
 
 
+SECTOR_ETFS = {
+    "Communication Services": "XLC",
+    "Consumer Discretionary": "XLY",
+    "Consumer Staples": "XLP",
+    "Energy": "XLE",
+    "Financials": "XLF",
+    "Health Care": "XLV",
+    "Industrials": "XLI",
+    "Information Technology": "XLK",
+    "Materials": "XLB",
+    "Real Estate": "XLRE",
+    "Utilities": "XLU",
+}
+
+@app.get("/api/sector-etf-prices")
+def get_sector_etf_prices(period: str = "1Y"):
+    """
+    Returns normalized % return series for 11 sector ETFs.
+    period: 3M | 6M | 1Y | 3Y | ALL
+    Cached daily in /tmp/sector_etf_prices_{period}_{date}.json
+    """
+    import datetime, json as _json
+    import yfinance as yf
+    from pathlib import Path
+
+    allowed = {"3M", "6M", "1Y", "3Y", "ALL"}
+    if period not in allowed:
+        raise HTTPException(status_code=400, detail=f"period must be one of {allowed}")
+
+    today = datetime.date.today().isoformat()
+    cache = Path(f"/tmp/sector_etf_prices_{period}_{today}.json")
+    if cache.exists():
+        try:
+            return _json.loads(cache.read_text())
+        except (ValueError, OSError):
+            cache.unlink(missing_ok=True)
+
+    days_map = {"3M": 91, "6M": 182, "1Y": 365, "3Y": 1095, "ALL": 9999}
+    days = days_map[period]
+    end = datetime.date.today()
+    start = (end - datetime.timedelta(days=days)).isoformat() if days < 9999 else "2018-01-01"
+
+    tickers = list(SECTOR_ETFS.values())
+    try:
+        raw = yf.download(tickers, start=start, end=end.isoformat(),
+                          auto_adjust=True, progress=False, multi_level_index=True)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"yfinance error: {e}")
+
+    closes = raw["Close"].dropna(how="all")
+    if closes.empty:
+        raise HTTPException(status_code=502, detail="No ETF data returned")
+
+    result = {"period": period, "sectors": {}}
+    for sector, etf in SECTOR_ETFS.items():
+        if etf not in closes.columns:
+            continue
+        series = closes[etf].dropna()
+        if series.empty:
+            continue
+        base = series.iloc[0]
+        pct = ((series - base) / base * 100).round(2)
+        result["sectors"][sector] = {
+            "etf": etf,
+            "dates": [d.strftime("%Y-%m-%d") for d in pct.index],
+            "values": pct.tolist(),
+        }
+
+    cache.write_text(_json.dumps(result))
+    return result
+
+
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
