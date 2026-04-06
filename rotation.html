@@ -277,6 +277,7 @@
     let drillBenchmark = 'market';   // 'market' | 'sector'
     let drillSnapshots = [];         // raw industry snapshots from API
     let visibleIndustries = new Set();
+    let drillLoading = false;
 
     function industryColor(name) {
         // Deterministic HSL color from name hash
@@ -606,6 +607,8 @@
     }
 
     async function enterDrill(sector) {
+        if (drillLoading) return;
+        drillLoading = true;
         stopPlay();
         drillSector = sector;
         drillBenchmark = 'market';
@@ -626,6 +629,7 @@
 
         try {
             const data = await pollIndustryReady(sector);
+            if (drillSector !== sector) return;  // user already exited — discard stale result
             drillSnapshots = data.snapshots || [];
             if (drillSnapshots.length === 0) throw new Error('No industry snapshots');
 
@@ -648,8 +652,18 @@
             initChart(playSnapshots[currentIdx]);
             renderFrame(currentIdx);
         } catch (e) {
-            document.getElementById('loadingSpinner').innerHTML =
-                `<div class="text-center text-danger py-4">Failed: ${e.message} — <span style="cursor:pointer;color:#60a5fa;" onclick="exitDrill()">返回</span></div>`;
+            const msg = document.getElementById('loadingMsg');
+            if (msg) msg.textContent = `Failed: ${e.message}`;
+            const spinner = document.getElementById('loadingSpinner');
+            if (spinner) {
+                const back = document.createElement('div');
+                back.className = 'text-center text-danger py-2';
+                back.innerHTML = `<span style="cursor:pointer;color:#60a5fa;" onclick="exitDrill()">← 返回</span>`;
+                spinner.appendChild(back);
+            }
+            drillLoading = false;
+        } finally {
+            drillLoading = false;
         }
     }
 
@@ -659,6 +673,16 @@
         drillBenchmark = 'market';
         drillSnapshots = [];
         visibleIndustries = new Set();
+
+        // Clean up any error markup left by a failed enterDrill
+        const spinner = document.getElementById('loadingSpinner');
+        if (spinner) {
+            const errDiv = spinner.querySelector('.text-danger');
+            if (errDiv) errDiv.remove();
+            const msg = document.getElementById('loadingMsg');
+            if (msg) msg.textContent = '';
+            spinner.style.display = 'none';
+        }
 
         // Restore UI
         document.getElementById('drillBreadcrumb').style.display = 'none';
