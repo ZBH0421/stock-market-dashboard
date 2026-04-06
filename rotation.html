@@ -273,6 +273,38 @@
     let chartGlobals = null;
     let axisRange = null;
     let visibleSectors = new Set(Object.keys(SECTOR_COLORS));
+    let drillSector = null;          // null = sector view; string = industry drill-down
+    let drillBenchmark = 'market';   // 'market' | 'sector'
+    let drillSnapshots = [];         // raw industry snapshots from API
+    let visibleIndustries = new Set();
+
+    function industryColor(name) {
+        // Deterministic HSL color from name hash
+        let hash = 0;
+        for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) & 0xffffffff;
+        const h = Math.abs(hash) % 360;
+        return `hsl(${h}, 65%, 60%)`;
+    }
+
+    function getItemColor(name) {
+        return SECTOR_COLORS[name] || industryColor(name);
+    }
+
+    function industryToSectorFormat(snap, benchmark) {
+        // Normalise industry snapshot into the same shape as a sector snapshot
+        // so buildSeries / drawTrails / renderTable work without changes.
+        return {
+            ...snap,
+            sectors: snap.industries.map(ind => ({
+                sector:       ind.industry,
+                rs_ratio:     benchmark === 'market' ? ind.rs_ratio_market   : ind.rs_ratio_sector,
+                rs_momentum:  benchmark === 'market' ? ind.rs_momentum_market : ind.rs_momentum_sector,
+                quadrant:     benchmark === 'market' ? ind.quadrant_market    : ind.quadrant_sector,
+                return_13w:   ind.return_13w,
+                return_4w:    ind.return_4w,
+            })),
+        };
+    }
 
     function fmtReturn(v) {
         const cls = v >= 0 ? 'return-pos' : 'return-neg';
@@ -301,14 +333,18 @@
         const trail = playSnapshots.slice(startIdx, currentIdx + 1);
         const N = trail.length;
 
-        Object.keys(SECTOR_COLORS).filter(s => visibleSectors.has(s)).forEach(sector => {
+        const itemNames = drillSector
+            ? (playSnapshots[0]?.sectors || []).map(s => s.sector).filter(n => visibleIndustries.has(n))
+            : Object.keys(SECTOR_COLORS).filter(s => visibleSectors.has(s));
+
+        itemNames.forEach(sector => {
             const points = trail.map(snap => {
                 const s = snap.sectors.find(x => x.sector === sector);
                 return s ? dataToSvgPx(s.rs_ratio, s.rs_momentum) : null;
             }).filter(Boolean);
 
             if (points.length < 2) return;
-            const color = SECTOR_COLORS[sector];
+            const color = getItemColor(sector);
 
             for (let i = 0; i < points.length - 1; i++) {
                 const opacity = N <= 1 ? 0.8 : 0.05 + 0.75 * (i / (N - 2));
@@ -347,9 +383,10 @@
     }
 
     function buildSeries(sectors) {
+        const visible = drillSector ? visibleIndustries : visibleSectors;
         return ['Leading', 'Weakening', 'Lagging', 'Improving'].map(q => ({
             name: q,
-            data: sectors.filter(s => s.quadrant === q && visibleSectors.has(s.sector)).map(s => ({
+            data: sectors.filter(s => s.quadrant === q && visible.has(s.sector)).map(s => ({
                 x: s.rs_ratio, y: s.rs_momentum,
                 label: s.sector, return_13w: s.return_13w, return_4w: s.return_4w,
             })),
@@ -522,22 +559,124 @@
             const pill = document.createElement('div');
             pill.className = 'sector-pill active';
             pill.dataset.sector = sector;
-            pill.innerHTML = `<span class="pill-dot" style="background:${color}"></span>${sector}`;
+            pill.title = `Click to drill into ${sector} industries`;
+            pill.innerHTML = `<span class="pill-dot" style="background:${color}"></span>${sector} ▾`;
+            pill.addEventListener('click', () => enterDrill(sector));
+            container.appendChild(pill);
+        });
+        container.style.display = '';
+    }
+
+    function initIndustryToggles(industries) {
+        const container = document.getElementById('sectorToggles');
+        container.innerHTML = '';
+        industries.forEach(name => {
+            const color = getItemColor(name);
+            const pill = document.createElement('div');
+            pill.className = 'sector-pill active';
+            pill.dataset.sector = name;
+            pill.innerHTML = `<span class="pill-dot" style="background:${color}"></span>${name}`;
             pill.addEventListener('click', () => {
-                if (visibleSectors.has(sector)) {
-                    visibleSectors.delete(sector);
+                if (visibleIndustries.has(name)) {
+                    visibleIndustries.delete(name);
                     pill.classList.remove('active');
                 } else {
-                    visibleSectors.add(sector);
+                    visibleIndustries.add(name);
                     pill.classList.add('active');
                 }
                 if (chart) chart.updateSeries(buildSeries(playSnapshots[currentIdx].sectors), false);
                 drawTrails();
-                renderEtfChart();
             });
             container.appendChild(pill);
         });
         container.style.display = '';
+    }
+
+    async function pollIndustryReady(sector) {
+        const encoded = encodeURIComponent(sector);
+        for (let attempt = 0; attempt < 30; attempt++) {
+            await new Promise(r => setTimeout(r, attempt === 0 ? 0 : 10000));
+            const res = await fetch(`/api/industry-rotation-history?sector=${encoded}`);
+            if (res.status === 200) return res.json();
+            if (res.status !== 202) throw new Error('API error ' + res.status);
+            document.getElementById('loadingMsg').textContent =
+                `${sector} industry 資料計算中… (${attempt * 10}s)`;
+        }
+        throw new Error('Timed out waiting for industry data');
+    }
+
+    async function enterDrill(sector) {
+        stopPlay();
+        drillSector = sector;
+        drillBenchmark = 'market';
+
+        // Update UI
+        document.getElementById('drillSectorLabel').textContent = sector;
+        document.getElementById('drillBreadcrumb').style.display = '';
+        document.getElementById('sectorToggles').style.display = 'none';
+        document.getElementById('etfChartCard').style.display = 'none';
+        document.getElementById('benchmarkToggle').style.display = '';
+        document.querySelectorAll('.benchmark-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.bm === 'market');
+        });
+
+        // Show spinner inside the RRG card
+        document.getElementById('loadingMsg').textContent = `${sector} industry 資料載入中…`;
+        document.getElementById('loadingSpinner').style.display = '';
+
+        try {
+            const data = await pollIndustryReady(sector);
+            drillSnapshots = data.snapshots || [];
+            if (drillSnapshots.length === 0) throw new Error('No industry snapshots');
+
+            // Normalise to sector format using current benchmark
+            const normalised = smoothSnapshots(
+                drillSnapshots.map(s => industryToSectorFormat(s, drillBenchmark))
+            );
+            allSnapshots = normalised;
+            playSnapshots = normalised.length > 52 ? normalised.slice(-52) : normalised;
+            currentIdx = playSnapshots.length - 1;
+
+            const industryNames = drillSnapshots[0].industries.map(i => i.industry);
+            visibleIndustries = new Set(industryNames);
+
+            document.getElementById('loadingSpinner').style.display = 'none';
+            initIndustryToggles(industryNames);
+
+            // Re-init chart with new axis range
+            if (chart) { chart.destroy(); chart = null; chartGlobals = null; }
+            initChart(playSnapshots[currentIdx]);
+            renderFrame(currentIdx);
+        } catch (e) {
+            document.getElementById('loadingSpinner').innerHTML =
+                `<div class="text-center text-danger py-4">Failed: ${e.message} — <span style="cursor:pointer;color:#60a5fa;" onclick="exitDrill()">返回</span></div>`;
+        }
+    }
+
+    function exitDrill() {
+        stopPlay();
+        drillSector = null;
+        drillBenchmark = 'market';
+        drillSnapshots = [];
+        visibleIndustries = new Set();
+
+        // Restore UI
+        document.getElementById('drillBreadcrumb').style.display = 'none';
+        document.getElementById('benchmarkToggle').style.display = 'none';
+        document.getElementById('etfChartCard').style.display = '';
+
+        // Reload sector snapshots — cache hit so instant
+        fetch('/api/sector-rotation-history').then(r => r.json()).then(data => {
+            allSnapshots = smoothSnapshots(data.snapshots || []);
+            playSnapshots = allSnapshots.length > 52 ? allSnapshots.slice(-52) : allSnapshots;
+            currentIdx = playSnapshots.length - 1;
+
+            if (chart) { chart.destroy(); chart = null; chartGlobals = null; }
+            initSectorToggles();
+            initChart(playSnapshots[currentIdx]);
+            renderFrame(currentIdx);
+            renderEtfChart();
+        });
     }
 
     function initControls() {
@@ -570,6 +709,27 @@
         });
 
         initTimelineDrag();
+
+        document.getElementById('drillBack').addEventListener('click', exitDrill);
+
+        document.getElementById('benchmarkToggle').addEventListener('click', e => {
+            const btn = e.target.closest('[data-bm]');
+            if (!btn || !drillSector || !drillSnapshots.length) return;
+            drillBenchmark = btn.dataset.bm;
+            document.querySelectorAll('.benchmark-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.bm === drillBenchmark);
+            });
+            const normalised = smoothSnapshots(
+                drillSnapshots.map(s => industryToSectorFormat(s, drillBenchmark))
+            );
+            allSnapshots = normalised;
+            playSnapshots = normalised.length > 52 ? normalised.slice(-52) : normalised;
+            currentIdx = playSnapshots.length - 1;
+            axisRange = computeAxisRange(allSnapshots);
+            if (chart) chart.updateSeries(buildSeries(playSnapshots[currentIdx].sectors), false);
+            drawTrails();
+            renderFrame(currentIdx);
+        });
     }
 
     async function pollUntilReady() {
