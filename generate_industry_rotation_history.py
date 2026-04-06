@@ -19,13 +19,7 @@ import pandas as pd
 from pathlib import Path
 from sqlalchemy import text
 from market_data_db import MarketDataDB
-from generate_rotation_history import GICS_MAP, ALL_SECTORS, _weighted_return
-
-
-def _atomic_write(path: Path, data: dict) -> None:
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data))
-    tmp.rename(path)
+from generate_rotation_history import GICS_MAP, ALL_SECTORS, _weighted_return, _atomic_write
 
 
 def _sector_slug(sector: str) -> str:
