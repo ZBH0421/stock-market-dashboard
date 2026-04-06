@@ -492,10 +492,35 @@
         throw new Error('Timed out waiting for history data');
     }
 
+    function smoothSnapshots(snaps) {
+        // 3-week trailing moving average on rs_ratio and rs_momentum per sector
+        if (snaps.length < 2) return snaps;
+        const sectorNames = snaps[0].sectors.map(s => s.sector);
+        // Build per-sector time series
+        const series = {};
+        sectorNames.forEach(name => { series[name] = { rs_ratio: [], rs_momentum: [] }; });
+        snaps.forEach(snap => snap.sectors.forEach(s => {
+            series[s.sector].rs_ratio.push(s.rs_ratio);
+            series[s.sector].rs_momentum.push(s.rs_momentum);
+        }));
+        // Apply smoothing and rebuild snapshots
+        return snaps.map((snap, i) => ({
+            ...snap,
+            sectors: snap.sectors.map(s => {
+                const r = series[s.sector].rs_ratio;
+                const m = series[s.sector].rs_momentum;
+                const w = Math.min(3, i + 1);
+                const avgR = r.slice(i - w + 1, i + 1).reduce((a, b) => a + b, 0) / w;
+                const avgM = m.slice(i - w + 1, i + 1).reduce((a, b) => a + b, 0) / w;
+                return { ...s, rs_ratio: Math.round(avgR * 100) / 100, rs_momentum: Math.round(avgM * 100) / 100 };
+            }),
+        }));
+    }
+
     async function load() {
         try {
             const data = await pollUntilReady();
-            allSnapshots = data.snapshots || [];
+            allSnapshots = smoothSnapshots(data.snapshots || []);
             if (allSnapshots.length === 0) throw new Error('No snapshot data returned');
 
             playSnapshots = allSnapshots.length > 52
