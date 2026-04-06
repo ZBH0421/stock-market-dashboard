@@ -1135,5 +1135,37 @@ def get_sector_rotation():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/sector-rotation-history")
+def get_sector_rotation_history():
+    """
+    Returns all weekly RRG snapshots for animated playback.
+    Serves cache /tmp/sector_rotation_history_{date}.json if present today.
+    Returns 202 {status: 'generating'} while computing.
+    """
+    import datetime, subprocess, sys
+    from pathlib import Path
+    from fastapi.responses import JSONResponse
+    import json as _json
+
+    today = datetime.date.today().isoformat()
+    cache = Path(f"/tmp/sector_rotation_history_{today}.json")
+
+    if cache.exists():
+        try:
+            return _json.loads(cache.read_text())
+        except (ValueError, OSError):
+            cache.unlink(missing_ok=True)
+
+    script = Path(__file__).parent / "generate_rotation_history.py"
+    subprocess.Popen(
+        [sys.executable, str(script), "--force"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    return JSONResponse(status_code=202, content={
+        "status": "generating",
+        "message": "Computing history snapshots, retry in 30 seconds.",
+    })
+
+
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
