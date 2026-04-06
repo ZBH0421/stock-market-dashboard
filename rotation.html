@@ -178,15 +178,14 @@
         <!-- Chart -->
         <div class="card mb-4">
             <div class="card-body p-2">
-                <div class="chart-wrap">
-                    <div id="rrgChart">
-                        <div class="loading-spinner" id="loadingSpinner">
-                            <div class="text-center">
-                                <div class="spinner-border text-info mb-2"></div>
-                                <div class="text-secondary" id="loadingMsg">載入歷史資料中…</div>
-                            </div>
-                        </div>
+                <div class="loading-spinner" id="loadingSpinner">
+                    <div class="text-center">
+                        <div class="spinner-border text-info mb-2"></div>
+                        <div class="text-secondary" id="loadingMsg">載入歷史資料中…</div>
                     </div>
+                </div>
+                <div class="chart-wrap" id="rrgChartWrap" style="display:none;">
+                    <div id="rrgChart"></div>
                     <svg id="trailSvg"></svg>
                 </div>
             </div>
@@ -625,6 +624,7 @@
 
         // Show spinner inside the RRG card
         document.getElementById('loadingMsg').textContent = `${sector} industry 資料載入中…`;
+        document.getElementById('rrgChartWrap').style.display = 'none';
         document.getElementById('loadingSpinner').style.display = '';
 
         try {
@@ -645,6 +645,7 @@
             visibleIndustries = new Set(industryNames);
 
             document.getElementById('loadingSpinner').style.display = 'none';
+            document.getElementById('rrgChartWrap').style.display = '';
             initIndustryToggles(industryNames);
 
             // Re-init chart with new axis range
@@ -695,6 +696,7 @@
             currentIdx = playSnapshots.length - 1;
 
             if (chart) { chart.destroy(); chart = null; chartGlobals = null; }
+            document.getElementById('rrgChartWrap').style.display = '';
             initSectorToggles();
             initChart(playSnapshots[currentIdx]);
             renderFrame(currentIdx);
@@ -804,6 +806,7 @@
             currentIdx = playSnapshots.length - 1;
 
             document.getElementById('loadingSpinner').style.display = 'none';
+            document.getElementById('rrgChartWrap').style.display = '';
             document.getElementById('ctrlBar').style.display = '';
 
             initControls();
