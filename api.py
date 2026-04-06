@@ -811,5 +811,325 @@ def regenerate_brief():
     return {"status": "generating", "message": "Regenerating brief in background."}
 
 
+# ---------------------------------------------------------------------------
+# GICS sector mapping: industry name -> 11 GICS sector
+# ---------------------------------------------------------------------------
+_GICS_MAP = {
+    "Advertising Agencies": "Communication Services",
+    "Aerospace & Defense": "Industrials",
+    "Agricultural Inputs": "Materials",
+    "Airlines": "Industrials",
+    "Airports & Air Services": "Industrials",
+    "Aluminum": "Materials",
+    "Apparel Manufacturing": "Consumer Discretionary",
+    "Apparel Retail": "Consumer Discretionary",
+    "Asset Management": "Financials",
+    "Auto & Truck Dealerships": "Consumer Discretionary",
+    "Auto Manufacturers": "Consumer Discretionary",
+    "Auto Parts": "Consumer Discretionary",
+    "Banks - Diversified": "Financials",
+    "Banks - Regional": "Financials",
+    "Beverages - Brewers": "Consumer Staples",
+    "Beverages - Non-Alcoholic": "Consumer Staples",
+    "Beverages - Wineries & Distilleries": "Consumer Staples",
+    "Biotechnology": "Health Care",
+    "Broadcasting": "Communication Services",
+    "Building Materials": "Industrials",
+    "Building Products & Equipment": "Industrials",
+    "Business Equipment & Supplies": "Industrials",
+    "Capital Markets": "Financials",
+    "Chemicals": "Materials",
+    "Coking Coal": "Energy",
+    "Communication Equipment": "Information Technology",
+    "Computer Hardware": "Information Technology",
+    "Confectioners": "Consumer Staples",
+    "Conglomerates": "Industrials",
+    "Consulting Services": "Industrials",
+    "Consumer Electronics": "Consumer Discretionary",
+    "Copper": "Materials",
+    "Credit Services": "Financials",
+    "Department Stores": "Consumer Discretionary",
+    "Diagnostics & Research": "Health Care",
+    "Discount Stores": "Consumer Staples",
+    "Drug Manufacturers - General": "Health Care",
+    "Drug Manufacturers - Specialty & Generic": "Health Care",
+    "Education & Training Services": "Consumer Discretionary",
+    "Electrical Equipment & Parts": "Industrials",
+    "Electronic Components": "Information Technology",
+    "Electronic Gaming & Multimedia": "Communication Services",
+    "Electronics & Computer Distribution": "Information Technology",
+    "Engineering & Construction": "Industrials",
+    "Entertainment": "Communication Services",
+    "Farm & Heavy Construction Machinery": "Industrials",
+    "Farm Products": "Consumer Staples",
+    "Financial Conglomerates": "Financials",
+    "Financial Data & Stock Exchanges": "Financials",
+    "Food Distribution": "Consumer Staples",
+    "Footwear & Accessories": "Consumer Discretionary",
+    "Furnishings, Fixtures & Appliances": "Consumer Discretionary",
+    "Gambling": "Consumer Discretionary",
+    "Gold": "Materials",
+    "Grocery Stores": "Consumer Staples",
+    "Health Information Services": "Health Care",
+    "Healthcare Plans": "Health Care",
+    "Home Improvement Retail": "Consumer Discretionary",
+    "Household & Personal Products": "Consumer Staples",
+    "Industrial Distribution": "Industrials",
+    "Information Technology Services": "Information Technology",
+    "Infrastructure Operations": "Utilities",
+    "Insurance - Diversified": "Financials",
+    "Insurance - Life": "Financials",
+    "Insurance - Property & Casualty": "Financials",
+    "Insurance - Reinsurance": "Financials",
+    "Insurance - Specialty": "Financials",
+    "Insurance Brokers": "Financials",
+    "Integrated Freight & Logistics": "Industrials",
+    "Internet Content & Information": "Communication Services",
+    "Internet Retail": "Consumer Discretionary",
+    "Leisure": "Consumer Discretionary",
+    "Lodging": "Consumer Discretionary",
+    "Lumber & Wood Production": "Materials",
+    "Luxury Goods": "Consumer Discretionary",
+    "Marine Shipping": "Industrials",
+    "Medical Care Facilities": "Health Care",
+    "Medical Devices": "Health Care",
+    "Medical Distribution": "Health Care",
+    "Medical Instruments & Supplies": "Health Care",
+    "Metal Fabrication": "Industrials",
+    "Mortgage Finance": "Financials",
+    "Oil & Gas Drilling": "Energy",
+    "Oil & Gas Equipment & Services": "Energy",
+    "Oil & Gas Exploration & Production": "Energy",
+    "Oil & Gas Integrated": "Energy",
+    "Oil & Gas Midstream": "Energy",
+    "Oil & Gas Refining & Marketing": "Energy",
+    "Other Industrial Metals & Mining": "Materials",
+    "Other Precious Metals & Mining": "Materials",
+    "Packaged Foods": "Consumer Staples",
+    "Packaging & Containers": "Materials",
+    "Paper & Paper Products": "Materials",
+    "Personal Services": "Consumer Discretionary",
+    "Pharmaceutical Retailers": "Health Care",
+    "Pollution & Treatment Controls": "Industrials",
+    "Publishing": "Communication Services",
+    "REIT - Diversified": "Real Estate",
+    "REIT - Healthcare Facilities": "Real Estate",
+    "REIT - Hotel & Motel": "Real Estate",
+    "REIT - Industrial": "Real Estate",
+    "REIT - Mortgage": "Real Estate",
+    "REIT - Office": "Real Estate",
+    "REIT - Residential": "Real Estate",
+    "REIT - Retail": "Real Estate",
+    "REIT - Specialty": "Real Estate",
+    "Railroads": "Industrials",
+    "Real Estate - Development": "Real Estate",
+    "Real Estate - Diversified": "Real Estate",
+    "Real Estate Services": "Real Estate",
+    "Recreational Vehicles": "Consumer Discretionary",
+    "Rental & Leasing Services": "Industrials",
+    "Residential Construction": "Consumer Discretionary",
+    "Resorts & Casinos": "Consumer Discretionary",
+    "Restaurants": "Consumer Discretionary",
+    "Scientific & Technical Instruments": "Information Technology",
+    "Security & Protection Services": "Industrials",
+    "Semiconductor Equipment & Materials": "Information Technology",
+    "Semiconductors": "Information Technology",
+    "Shell Companies": None,
+    "Silver": "Materials",
+    "Software - Application": "Information Technology",
+    "Software - Infrastructure": "Information Technology",
+    "Solar": "Utilities",
+    "Specialty Business Services": "Industrials",
+    "Specialty Chemicals": "Materials",
+    "Specialty Industrial Machinery": "Industrials",
+    "Specialty Retail": "Consumer Discretionary",
+    "Staffing & Employment Services": "Industrials",
+    "Steel": "Materials",
+    "Telecom Services": "Communication Services",
+    "Textile Manufacturing": "Consumer Discretionary",
+    "Thermal Coal": "Energy",
+    "Tobacco": "Consumer Staples",
+    "Tools & Accessories": "Industrials",
+    "Travel Services": "Consumer Discretionary",
+    "Trucking": "Industrials",
+    "Uranium": "Energy",
+    "Utilities - Diversified": "Utilities",
+    "Utilities - Independent Power Producers": "Utilities",
+    "Utilities - Regulated Electric": "Utilities",
+    "Utilities - Regulated Gas": "Utilities",
+    "Utilities - Regulated Water": "Utilities",
+    "Utilities - Renewable": "Utilities",
+    "Waste Management": "Industrials",
+}
+
+
+@app.get("/api/sector-rotation")
+def get_sector_rotation():
+    """
+    Returns RS-Ratio and RS-Momentum for 11 GICS sectors for an RRG chart.
+    RS-Ratio  = 13W sector return vs market, normalized around 100
+    RS-Momentum = 4W sector return vs market, normalized around 100
+    Quadrant: Leading (RS>100 & Mom>100), Weakening (RS>100 & Mom<100),
+              Lagging (RS<100 & Mom<100), Improving (RS<100 & Mom>100)
+    """
+    import numpy as np
+
+    try:
+        with db.engine.connect() as conn:
+            # Pull last 70 trading days of data (need 65 for 13W + buffer)
+            query = text("""
+                WITH ranked_dates AS (
+                    SELECT DISTINCT date
+                    FROM us_daily_prices
+                    ORDER BY date DESC
+                    LIMIT 70
+                ),
+                date_bounds AS (
+                    SELECT MIN(date) AS start_date, MAX(date) AS end_date
+                    FROM ranked_dates
+                ),
+                prices AS (
+                    SELECT
+                        p.symbol,
+                        p.date,
+                        p.close,
+                        t.market_cap,
+                        i.name AS industry
+                    FROM us_daily_prices p
+                    JOIN tickers t ON p.symbol = t.ticker
+                    JOIN industries i ON t.industry_id = i.id
+                    JOIN date_bounds db ON p.date BETWEEN db.start_date AND db.end_date
+                    WHERE t.market_cap IS NOT NULL AND t.market_cap > 0
+                )
+                SELECT symbol, date, close, market_cap, industry
+                FROM prices
+                ORDER BY date
+            """)
+            rows = conn.execute(query).fetchall()
+
+        if not rows:
+            raise HTTPException(status_code=503, detail="No price data available")
+
+        # Build DataFrame
+        df = pd.DataFrame(rows, columns=["symbol", "date", "close", "market_cap", "industry"])
+        df["date"] = pd.to_datetime(df["date"])
+        df["close"] = df["close"].astype(float)
+        df["market_cap"] = df["market_cap"].astype(float)
+
+        # Map industry -> GICS sector, drop unmapped
+        df["sector"] = df["industry"].map(_GICS_MAP)
+        df = df[df["sector"].notna()].copy()
+
+        # Get sorted trading dates
+        all_dates = sorted(df["date"].unique())
+        if len(all_dates) < 21:
+            raise HTTPException(status_code=503, detail="Not enough trading days")
+
+        date_today = all_dates[-1]
+        date_4w = all_dates[-21] if len(all_dates) >= 21 else all_dates[0]
+        date_13w = all_dates[-66] if len(all_dates) >= 66 else all_dates[0]
+
+        def sector_return(sector_name, start_date):
+            """Market-cap weighted return for sector from start_date to latest."""
+            sub = df[df["sector"] == sector_name]
+            start = sub[sub["date"] == start_date][["symbol", "close", "market_cap"]].copy()
+            end = sub[sub["date"] == date_today][["symbol", "close", "market_cap"]].copy()
+            merged = start.merge(end, on="symbol", suffixes=("_s", "_e"))
+            if merged.empty:
+                return None
+            weights = merged["market_cap_s"]
+            returns = (merged["close_e"] / merged["close_s"] - 1)
+            total_w = weights.sum()
+            if total_w == 0:
+                return None
+            return float((returns * weights).sum() / total_w)
+
+        def market_return(start_date):
+            """Market-cap weighted return for all sectors from start_date to latest."""
+            start = df[df["date"] == start_date][["symbol", "close", "market_cap"]].copy()
+            end = df[df["date"] == date_today][["symbol", "close", "market_cap"]].copy()
+            merged = start.merge(end, on="symbol", suffixes=("_s", "_e"))
+            if merged.empty:
+                return None
+            weights = merged["market_cap_s"]
+            returns = (merged["close_e"] / merged["close_s"] - 1)
+            total_w = weights.sum()
+            if total_w == 0:
+                return None
+            return float((returns * weights).sum() / total_w)
+
+        mkt_13w = market_return(date_13w)
+        mkt_4w = market_return(date_4w)
+
+        sectors = [s for s in _GICS_MAP.values() if s is not None]
+        sectors = sorted(set(sectors))
+
+        raw = []
+        for s in sectors:
+            r13 = sector_return(s, date_13w)
+            r4 = sector_return(s, date_4w)
+            if r13 is None or r4 is None or mkt_13w is None or mkt_4w is None:
+                continue
+            # Relative strength vs market
+            rs_13w = (1 + r13) / (1 + mkt_13w) if mkt_13w != -1 else None
+            rs_4w = (1 + r4) / (1 + mkt_4w) if mkt_4w != -1 else None
+            if rs_13w is None or rs_4w is None:
+                continue
+            raw.append({
+                "sector": s,
+                "rs_13w_raw": rs_13w,
+                "rs_4w_raw": rs_4w,
+                "return_13w": round(r13 * 100, 2),
+                "return_4w": round(r4 * 100, 2),
+            })
+
+        if not raw:
+            raise HTTPException(status_code=503, detail="Could not compute sector returns")
+
+        # Normalize RS values to be centered around 100
+        rs13_vals = [r["rs_13w_raw"] for r in raw]
+        rs4_vals = [r["rs_4w_raw"] for r in raw]
+        mean13, std13 = float(np.mean(rs13_vals)), float(np.std(rs13_vals))
+        mean4, std4 = float(np.mean(rs4_vals)), float(np.std(rs4_vals))
+
+        results = []
+        for r in raw:
+            rs_ratio = 100 + (r["rs_13w_raw"] - mean13) / std13 * 10 if std13 > 0 else 100.0
+            rs_mom = 100 + (r["rs_4w_raw"] - mean4) / std4 * 10 if std4 > 0 else 100.0
+            rs_ratio = round(rs_ratio, 2)
+            rs_mom = round(rs_mom, 2)
+            if rs_ratio >= 100 and rs_mom >= 100:
+                quadrant = "Leading"
+            elif rs_ratio >= 100 and rs_mom < 100:
+                quadrant = "Weakening"
+            elif rs_ratio < 100 and rs_mom < 100:
+                quadrant = "Lagging"
+            else:
+                quadrant = "Improving"
+            results.append({
+                "sector": r["sector"],
+                "rs_ratio": rs_ratio,
+                "rs_momentum": rs_mom,
+                "quadrant": quadrant,
+                "return_13w": r["return_13w"],
+                "return_4w": r["return_4w"],
+            })
+
+        results.sort(key=lambda x: x["rs_ratio"], reverse=True)
+        return {
+            "as_of": date_today.strftime("%Y-%m-%d"),
+            "market_return_13w": round(mkt_13w * 100, 2) if mkt_13w else None,
+            "market_return_4w": round(mkt_4w * 100, 2) if mkt_4w else None,
+            "sectors": results,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
