@@ -60,8 +60,13 @@
             </div>
         </div>
 
+        <!-- Short window warning -->
+        <div id="shortWindowWarn" class="alert mb-3 py-2 px-3" style="display:none;background:#713f1222;border:1px solid #92400e;color:#fb923c;font-size:0.83rem;border-radius:8px;">
+            ⚠️ 資料不足 65 個交易日，RS-Ratio 以較短窗口計算，數值僅供參考。
+        </div>
+
         <!-- Market return stat cards -->
-        <div class="row g-3 mb-4" id="statCards" style="display:none!important;">
+        <div class="row g-3 mb-4" id="statCards" style="display:none;">
             <div class="col-6 col-md-3">
                 <div class="stat-card">
                     <div class="stat-label">Market 13W Return</div>
@@ -296,20 +301,25 @@
 
             document.getElementById('asOf').textContent = data.as_of || '—';
 
+            // Short window warning
+            if (data.window_13w_full === false) {
+                document.getElementById('shortWindowWarn').style.display = 'block';
+            }
+
             // Stat cards
             const mkt13 = data.market_return_13w;
             const mkt4 = data.market_return_4w;
             const el13 = document.getElementById('mkt13w');
             const el4 = document.getElementById('mkt4w');
-            if (mkt13 !== null) {
+            if (mkt13 !== null && mkt13 !== undefined) {
                 el13.textContent = (mkt13 >= 0 ? '+' : '') + mkt13.toFixed(1) + '%';
                 el13.className = 'stat-value ' + (mkt13 >= 0 ? 'text-success' : 'text-danger');
             }
-            if (mkt4 !== null) {
+            if (mkt4 !== null && mkt4 !== undefined) {
                 el4.textContent = (mkt4 >= 0 ? '+' : '') + mkt4.toFixed(1) + '%';
                 el4.className = 'stat-value ' + (mkt4 >= 0 ? 'text-success' : 'text-danger');
             }
-            document.getElementById('statCards').style.removeProperty('display');
+            document.getElementById('statCards').style.display = '';
 
             renderChart(data.sectors, data.as_of);
             renderTable(data.sectors);

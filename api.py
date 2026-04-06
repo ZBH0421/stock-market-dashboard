@@ -1070,9 +1070,9 @@ def get_sector_rotation():
             r4 = sector_return(s, date_4w)
             if r13 is None or r4 is None or mkt_13w is None or mkt_4w is None:
                 continue
-            # Relative strength vs market
-            rs_13w = (1 + r13) / (1 + mkt_13w) if mkt_13w != -1 else None
-            rs_4w = (1 + r4) / (1 + mkt_4w) if mkt_4w != -1 else None
+            # Relative strength vs market (guard against near-total-loss market)
+            rs_13w = (1 + r13) / (1 + mkt_13w) if abs(1 + mkt_13w) > 1e-6 else None
+            rs_4w = (1 + r4) / (1 + mkt_4w) if abs(1 + mkt_4w) > 1e-6 else None
             if rs_13w is None or rs_4w is None:
                 continue
             raw.append({
@@ -1116,10 +1116,14 @@ def get_sector_rotation():
             })
 
         results.sort(key=lambda x: x["rs_ratio"], reverse=True)
+
+        actual_13w_days = len(all_dates) - 1 - list(all_dates).index(date_13w)
         return {
             "as_of": date_today.strftime("%Y-%m-%d"),
-            "market_return_13w": round(mkt_13w * 100, 2) if mkt_13w else None,
-            "market_return_4w": round(mkt_4w * 100, 2) if mkt_4w else None,
+            "window_13w_days": actual_13w_days,
+            "window_13w_full": actual_13w_days >= 65,
+            "market_return_13w": round(mkt_13w * 100, 2) if mkt_13w is not None else None,
+            "market_return_4w": round(mkt_4w * 100, 2) if mkt_4w is not None else None,
             "sectors": results,
         }
 
