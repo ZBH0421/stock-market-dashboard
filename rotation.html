@@ -413,6 +413,7 @@
         document.getElementById('tableDate').textContent = snap.date;
 
         if (!playTimer) renderTable(snap.sectors);
+        updateEtfMarker(snap.date);
     }
 
     function renderTable(sectors) {
@@ -657,6 +658,24 @@
         });
         etfChart.render();
         document.getElementById('etfChartCard').style.display = '';
+    }
+
+    function updateEtfMarker(dateStr) {
+        if (!etfChart) return;
+        const ts = new Date(dateStr).getTime();
+        etfChart.clearAnnotations();
+        etfChart.addXaxisAnnotation({
+            x: ts,
+            borderColor: '#94a3b8',
+            strokeDashArray: 3,
+            borderWidth: 1.5,
+            label: {
+                text: dateStr,
+                style: { color: '#94a3b8', background: '#1e293b', fontSize: '10px' },
+                orientation: 'horizontal',
+                position: 'top',
+            },
+        }, false);
     }
 
     // ETF range buttons
