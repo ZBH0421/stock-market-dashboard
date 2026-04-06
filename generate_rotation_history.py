@@ -9,6 +9,7 @@ import json
 import datetime
 import os
 import time
+import traceback
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -324,9 +325,8 @@ def generate(force: bool = False) -> None:
         }
         _atomic_write(cache, result)
     except Exception:
-        import traceback
         traceback.print_exc()
-        _atomic_write(cache, {"error": "generation failed", "generated_at": today, "total_snapshots": 0, "snapshots": []})
+        # Don't write error cache — let the next request retry
     finally:
         lock.unlink(missing_ok=True)
 
