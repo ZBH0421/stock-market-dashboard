@@ -61,6 +61,18 @@
         .slider-group input[type=range] { width: 80px; accent-color: #3b82f6; cursor: pointer; }
         .slider-group span { color: #94a3b8; font-size: 11px; min-width: 32px; }
 
+        /* Sector toggle pills */
+        .sector-toggles { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+        .sector-pill {
+            display: flex; align-items: center; gap: 5px;
+            background: #1e293b; border: 1px solid #334155; border-radius: 20px;
+            padding: 4px 10px; cursor: pointer; font-size: 12px; color: #94a3b8;
+            transition: opacity .15s, border-color .15s; user-select: none;
+        }
+        .sector-pill .pill-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .sector-pill.active { border-color: #475569; color: #e2e8f0; }
+        .sector-pill:not(.active) { opacity: 0.35; }
+
         /* Chart container — needs position:relative for SVG overlay */
         .chart-wrap { position: relative; }
         #rrgChart { min-height: 500px; }
@@ -125,6 +137,9 @@
                 <button class="range-btn" data-weeks="0">全部</button>
             </div>
         </div>
+
+        <!-- Sector visibility toggles -->
+        <div class="sector-toggles" id="sectorToggles" style="display:none;"></div>
 
         <!-- Chart -->
         <div class="card mb-4">
@@ -207,6 +222,7 @@
     let chart = null;
     let chartGlobals = null;
     let axisRange = null;
+    let visibleSectors = new Set(Object.keys(SECTOR_COLORS));
 
     function fmtReturn(v) {
         const cls = v >= 0 ? 'return-pos' : 'return-neg';
@@ -235,7 +251,7 @@
         const trail = playSnapshots.slice(startIdx, currentIdx + 1);
         const N = trail.length;
 
-        Object.keys(SECTOR_COLORS).forEach(sector => {
+        Object.keys(SECTOR_COLORS).filter(s => visibleSectors.has(s)).forEach(sector => {
             const points = trail.map(snap => {
                 const s = snap.sectors.find(x => x.sector === sector);
                 return s ? dataToSvgPx(s.rs_ratio, s.rs_momentum) : null;
@@ -283,7 +299,7 @@
     function buildSeries(sectors) {
         return ['Leading', 'Weakening', 'Lagging', 'Improving'].map(q => ({
             name: q,
-            data: sectors.filter(s => s.quadrant === q).map(s => ({
+            data: sectors.filter(s => s.quadrant === q && visibleSectors.has(s.sector)).map(s => ({
                 x: s.rs_ratio, y: s.rs_momentum,
                 label: s.sector, return_13w: s.return_13w, return_4w: s.return_4w,
             })),
@@ -448,6 +464,30 @@
         document.addEventListener('touchend', () => { dragging = false; });
     }
 
+    function initSectorToggles() {
+        const container = document.getElementById('sectorToggles');
+        container.innerHTML = '';
+        Object.entries(SECTOR_COLORS).forEach(([sector, color]) => {
+            const pill = document.createElement('div');
+            pill.className = 'sector-pill active';
+            pill.dataset.sector = sector;
+            pill.innerHTML = `<span class="pill-dot" style="background:${color}"></span>${sector}`;
+            pill.addEventListener('click', () => {
+                if (visibleSectors.has(sector)) {
+                    visibleSectors.delete(sector);
+                    pill.classList.remove('active');
+                } else {
+                    visibleSectors.add(sector);
+                    pill.classList.add('active');
+                }
+                if (chart) chart.updateSeries(buildSeries(playSnapshots[currentIdx].sectors), false);
+                drawTrails();
+            });
+            container.appendChild(pill);
+        });
+        container.style.display = '';
+    }
+
     function initControls() {
         document.getElementById('btnPlay').addEventListener('click', togglePlay);
         document.getElementById('btnFirst').addEventListener('click', () => { stopPlay(); renderFrame(0); });
@@ -532,6 +572,7 @@
             document.getElementById('ctrlBar').style.display = '';
 
             initControls();
+            initSectorToggles();
             initChart(playSnapshots[currentIdx]);
             renderFrame(currentIdx);
         } catch (e) {
