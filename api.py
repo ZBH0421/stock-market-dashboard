@@ -7,6 +7,7 @@ import math
 import uvicorn
 import os
 from dotenv import load_dotenv
+from generate_rotation_history import ALL_SECTORS as _ROTATION_ALL_SECTORS
 
 # Load environment variables
 load_dotenv()
@@ -1250,10 +1251,9 @@ def get_industry_rotation_history(sector: str):
     from pathlib import Path
     from fastapi.responses import JSONResponse
     import json as _json
-    from generate_rotation_history import ALL_SECTORS as _ALL_SECTORS
 
-    if sector not in _ALL_SECTORS:
-        raise HTTPException(status_code=400, detail=f"Unknown sector: {sector!r}. Valid: {list(_ALL_SECTORS)}")
+    if sector not in _ROTATION_ALL_SECTORS:
+        raise HTTPException(status_code=400, detail=f"Unknown sector: {sector!r}. Valid: {list(_ROTATION_ALL_SECTORS)}")
 
     def _slug(s): return s.lower().replace(" ", "_").replace("&", "and")
 

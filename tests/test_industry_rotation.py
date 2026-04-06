@@ -1,5 +1,6 @@
 import sys, os, json, datetime, subprocess
 from pathlib import Path
+from unittest.mock import patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def _slug(sector): return sector.lower().replace(' ', '_').replace('&', 'and')
@@ -94,7 +95,8 @@ def test_api_returns_200_with_cache():
 
 def test_api_returns_202_without_cache():
     _clear_industry_cache("Energy")
-    res = client.get("/api/industry-rotation-history?sector=Energy")
+    with patch("subprocess.Popen"):
+        res = client.get("/api/industry-rotation-history?sector=Energy")
     assert res.status_code == 202
     assert res.json()["status"] == "generating"
 
