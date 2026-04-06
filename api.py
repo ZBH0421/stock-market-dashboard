@@ -1239,5 +1239,43 @@ def get_sector_etf_prices(period: str = "1Y"):
     return result
 
 
+@app.get("/api/industry-rotation-history")
+def get_industry_rotation_history(sector: str):
+    """
+    Returns weekly RRG snapshots for industries within a GICS sector.
+    Each snapshot contains both vs-market and vs-sector RS values.
+    Returns 202 while computing, 400 for unknown sector.
+    """
+    import datetime, subprocess, sys
+    from pathlib import Path
+    from fastapi.responses import JSONResponse
+    import json as _json
+    from generate_rotation_history import ALL_SECTORS as _ALL_SECTORS
+
+    if sector not in _ALL_SECTORS:
+        raise HTTPException(status_code=400, detail=f"Unknown sector: {sector!r}. Valid: {list(_ALL_SECTORS)}")
+
+    def _slug(s): return s.lower().replace(" ", "_").replace("&", "and")
+
+    today = datetime.date.today().isoformat()
+    cache = Path(f"/tmp/industry_rotation_history_{_slug(sector)}_{today}.json")
+
+    if cache.exists():
+        try:
+            return _json.loads(cache.read_text())
+        except (ValueError, OSError):
+            cache.unlink(missing_ok=True)
+
+    script = Path(__file__).parent / "generate_industry_rotation_history.py"
+    subprocess.Popen(
+        [sys.executable, str(script), "--sector", sector, "--force"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    return JSONResponse(status_code=202, content={
+        "status": "generating",
+        "message": f"Computing {sector} industry snapshots, retry in 30 seconds.",
+    })
+
+
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
