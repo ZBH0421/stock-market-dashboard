@@ -352,25 +352,33 @@
             comparedItems.delete(name);
             comparedData.delete(name);
         } else {
-            comparedItems.add(name);
             let dates = [], values = [];
             const isSector = !!SECTOR_COLORS[name];
             if (isSector && etfData?.sectors?.[name]) {
                 dates = etfData.sectors[name].dates;
                 values = etfData.sectors[name].values;
-            } else if (!isSector && drillSnapshots.length > 0) {
+            } else if (!isSector) {
                 // Industry: compute cumulative return from drillSnapshots
-                let cum = 1;
-                drillSnapshots.forEach(s => {
-                    const ind = s.industries.find(i => i.industry === name);
-                    if (ind) {
-                        const w = Math.pow(1 + ind.return_4w / 100, 1 / 4) - 1;
-                        cum *= (1 + w);
-                        dates.push(s.date);
-                        values.push(parseFloat(((cum - 1) * 100).toFixed(2)));
-                    }
-                });
+                const snaps = drillSnapshots.filter(s => s.industries.some(i => i.industry === name));
+                if (snaps.length > 0) {
+                    let cum = 1;
+                    snaps.forEach(s => {
+                        const ind = s.industries.find(i => i.industry === name);
+                        if (ind) {
+                            const w = Math.pow(1 + ind.return_4w / 100, 1 / 4) - 1;
+                            cum *= (1 + w);
+                            dates.push(s.date);
+                            values.push(parseFloat(((cum - 1) * 100).toFixed(2)));
+                        }
+                    });
+                }
+                if (dates.length === 0) {
+                    // No data available for this industry; don't add to comparison
+                    console.warn(`addToComparison: no drillSnapshot data for industry "${name}"`);
+                    return;
+                }
             }
+            comparedItems.add(name);
             comparedData.set(name, { dates, values, color });
         }
         // Update pill visual
