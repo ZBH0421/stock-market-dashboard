@@ -1061,7 +1061,7 @@
                 y: { formatter: v => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%` },
                 x: { format: 'yyyy-MM-dd' },
             },
-            legend: { show: false },
+            legend: { position: 'top', labels: { colors: '#94a3b8' }, onItemClick: { toggleDataSeries: true }, onItemHover: { highlightDataSeries: true } },
             grid: { borderColor: '#334155' },
             annotations: { yaxis: [{ y: 0, borderColor: '#475569', strokeDashArray: 4 }] },
             theme: { mode: 'dark' },
