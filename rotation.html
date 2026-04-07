@@ -72,6 +72,15 @@
         .sector-pill.compared .pill-left { color: #60a5fa; background: #1e3a5f; }
         .sector-pill.compared { border-color: #1d4ed8; }
         .sector-pill.no-drill .pill-right { display: none; }
+        .sector-pill.ticker-match { border-color: #f59e0b; box-shadow: 0 0 0 2px rgba(245,158,11,0.35); animation: pill-pulse 1.2s ease 2; }
+        @keyframes pill-pulse { 0%,100%{box-shadow:0 0 0 2px rgba(245,158,11,0.35)} 50%{box-shadow:0 0 0 5px rgba(245,158,11,0.6)} }
+        /* Ticker search bar */
+        .ticker-search-wrap { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+        .ticker-search-input { background:#0f172a; border:1px solid #334155; border-radius:8px; color:#e2e8f0; padding:5px 12px; font-size:12px; width:180px; outline:none; text-transform:uppercase; }
+        .ticker-search-input:focus { border-color:#475569; }
+        .ticker-search-btn { background:#1e293b; border:1px solid #334155; border-radius:8px; color:#94a3b8; padding:5px 12px; font-size:12px; cursor:pointer; }
+        .ticker-search-btn:hover { background:#334155; color:#e2e8f0; }
+        .ticker-search-result { font-size:11px; color:#64748b; }
 
         /* Chart container — needs position:relative for SVG overlay */
         .chart-wrap { position: relative; }
@@ -190,6 +199,16 @@
             <span>›</span>
             <span class="drill-sector" id="drillSectorLabel"></span>
             <span id="drillBack" class="drill-back">← 返回</span>
+        </div>
+
+        <!-- Ticker search (shown in sector mode) -->
+        <div class="ticker-search-wrap" id="tickerSearchWrap" style="display:none;">
+            <input class="ticker-search-input" id="tickerSearchInput" type="text"
+                   placeholder="輸入股票代碼 e.g. AAPL"
+                   autocomplete="off" spellcheck="false"
+                   onkeydown="if(event.key==='Enter')lookupTickerRRG()">
+            <button class="ticker-search-btn" onclick="lookupTickerRRG()">查詢</button>
+            <span class="ticker-search-result" id="tickerSearchResult"></span>
         </div>
 
         <!-- Sector visibility toggles (shown in sector mode) -->
@@ -688,6 +707,7 @@
             container.appendChild(pill);
         });
         container.style.display = '';
+        document.getElementById('tickerSearchWrap').style.display = '';
     }
 
     function initIndustryToggles(industries) {
@@ -752,6 +772,7 @@
         document.getElementById('drillSectorLabel').textContent = sector;
         document.getElementById('drillBreadcrumb').style.display = '';
         document.getElementById('sectorToggles').style.display = 'none';
+        document.getElementById('tickerSearchWrap').style.display = 'none';
         document.getElementById('etfChartCard').style.display = 'none';
         document.getElementById('benchmarkToggle').style.display = '';
         document.querySelectorAll('.benchmark-btn').forEach(b => {
@@ -832,6 +853,7 @@
         // Restore UI
         document.getElementById('drillBreadcrumb').style.display = 'none';
         document.getElementById('benchmarkToggle').style.display = 'none';
+        document.getElementById('tickerSearchWrap').style.display = '';
         document.getElementById('etfChartCard').style.display = '';
 
         // Reload sector snapshots — cache hit so instant
@@ -1175,6 +1197,46 @@
         if (etfChart) { etfChart.destroy(); etfChart = null; }
         renderEtfChart();
     });
+
+    // ── Ticker lookup ────────────────────────────────────────────────────────
+    async function lookupTickerRRG() {
+        const input  = document.getElementById('tickerSearchInput');
+        const result = document.getElementById('tickerSearchResult');
+        const ticker = input.value.trim().toUpperCase();
+        if (!ticker) return;
+
+        result.textContent = '查詢中…';
+        result.style.color = '#64748b';
+
+        try {
+            const res = await fetch(`/api/stock-rrg-position?ticker=${encodeURIComponent(ticker)}`);
+            if (res.status === 404) {
+                result.textContent = `找不到 ${ticker}`;
+                result.style.color = '#f87171';
+                return;
+            }
+            const data = await res.json();
+            if (!data.sector) {
+                result.textContent = '查詢失敗';
+                result.style.color = '#f87171';
+                return;
+            }
+
+            result.innerHTML = `<span style="color:#94a3b8">${esc(ticker)}</span> <span style="color:#475569">→</span> <span style="color:#60a5fa;font-weight:600">${esc(data.sector)}</span> <span style="color:#475569">→</span> <span style="color:#94a3b8">${esc(data.industry)}</span>`;
+
+            // Highlight matching sector pill
+            document.querySelectorAll('.sector-pill').forEach(p => p.classList.remove('ticker-match'));
+            const match = document.querySelector(`.sector-pill[data-sector="${CSS.escape(data.sector)}"]`);
+            if (match) {
+                match.classList.add('ticker-match');
+                match.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                setTimeout(() => match.classList.remove('ticker-match'), 3500);
+            }
+        } catch (e) {
+            result.textContent = '查詢失敗';
+            result.style.color = '#f87171';
+        }
+    }
 
     document.getElementById('clearComparison').addEventListener('click', () => {
         comparedItems.clear();
