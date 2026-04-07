@@ -47,6 +47,19 @@ class DailyUpdater:
             else:
                 return "2024-01-01"
 
+    def _regenerate_sector_rrg(self):
+        """Force-regenerate today's sector rotation history cache from latest DB data."""
+        script = Path(__file__).parent / "generate_rotation_history.py"
+        print("\n--- Regenerating sector RRG cache ---")
+        result = subprocess.run(
+            [sys.executable, str(script), "--force"],
+            check=False,
+        )
+        if result.returncode != 0:
+            print(f"  WARNING: sector RRG regeneration failed (exit {result.returncode})")
+        else:
+            print("  Sector RRG cache updated.")
+
     def _warmup_industry_cache(self):
         """Pre-generate industry rotation history for all 11 sectors."""
         script = Path(__file__).parent / "generate_industry_rotation_history.py"
@@ -60,6 +73,36 @@ class DailyUpdater:
             if result.returncode != 0:
                 print(f"  WARNING: warm-up failed for {sector} (exit {result.returncode})")
         print("--- Warm-up complete ---")
+
+    def _refresh_shiller_cape(self):
+        """Pre-fetch Shiller CAPE so it's ready for the day (deletes stale cache)."""
+        import datetime as _dt, json as _json, urllib.request, tempfile, os
+        cache = Path("/tmp/shiller_cape_cache.json")
+        cache.unlink(missing_ok=True)
+        print("\n--- Refreshing Shiller CAPE cache ---")
+        try:
+            url = "http://www.econ.yale.edu/~shiller/data/ie_data.xls"
+            tmp = Path(tempfile.mktemp(suffix=".xls"))
+            urllib.request.urlretrieve(url, tmp)
+            import openpyxl, pandas as _pd
+            wb = openpyxl.load_workbook(tmp, read_only=True, data_only=True)
+            ws = wb.worksheets[1]
+            rows = list(ws.iter_rows(values_only=True))
+            header_row = next(i for i, r in enumerate(rows) if r[0] == "Date")
+            data_rows = [r for r in rows[header_row + 2:] if r[0] and r[12] is not None]
+            latest = data_rows[-1]
+            cape = float(latest[12])
+            raw_date = str(latest[0])
+            year = int(raw_date[:4])
+            month = int(round((float(raw_date) - int(raw_date[:4])) * 100))
+            month = max(1, min(12, month))
+            date_str = f"{year}-{month:02d}"
+            cache.write_text(_json.dumps({"cape": round(cape, 2), "date": date_str,
+                                          "source": "Robert Shiller / Yale (ie_data.xls)"}))
+            print(f"  CAPE updated: {cape:.2f} ({date_str})")
+            tmp.unlink(missing_ok=True)
+        except Exception as e:
+            print(f"  WARNING: Shiller CAPE refresh failed: {e}")
 
     def run(self):
         print("--- Starting Daily Stock Update ---")
@@ -147,7 +190,9 @@ class DailyUpdater:
         print(f"Skipped:   {skip_count} (No new data)")
         print(f"Delisted:  {delisted_count} (Removed from DB)")
         print(f"Errors:    {error_count}")
+        self._regenerate_sector_rrg()
         self._warmup_industry_cache()
+        self._refresh_shiller_cape()
 
 if __name__ == "__main__":
     updater = DailyUpdater()
