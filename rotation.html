@@ -354,6 +354,10 @@
         } else {
             let dates = [], values = [];
             const isSector = !!SECTOR_COLORS[name];
+            if (isSector && !etfData) {
+                console.warn(`addToComparison: ETF data not yet loaded for sector "${name}"`);
+                return;
+            }
             if (isSector && etfData?.sectors?.[name]) {
                 dates = etfData.sectors[name].dates;
                 values = etfData.sectors[name].values;
