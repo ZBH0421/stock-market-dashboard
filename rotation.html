@@ -63,15 +63,15 @@
 
         /* Sector toggle pills */
         .sector-toggles { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-        .sector-pill {
-            display: flex; align-items: center; gap: 5px;
-            background: #1e293b; border: 1px solid #334155; border-radius: 20px;
-            padding: 4px 10px; cursor: pointer; font-size: 12px; color: #94a3b8;
-            transition: opacity .15s, border-color .15s; user-select: none;
-        }
+        .sector-pill { display: inline-flex; align-items: center; border: 1px solid #334155; border-radius: 20px; font-size: 12px; color: #94a3b8; margin: 2px; overflow: hidden; }
+        .sector-pill .pill-left { display: flex; align-items: center; gap: 5px; padding: 4px 10px; cursor: pointer; }
+        .sector-pill .pill-left:hover { background: #334155; color: #e2e8f0; }
+        .sector-pill .pill-right { padding: 4px 8px; border-left: 1px solid #334155; color: #64748b; cursor: pointer; font-size: 11px; }
+        .sector-pill .pill-right:hover { background: #334155; color: #60a5fa; }
         .sector-pill .pill-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-        .sector-pill.active { border-color: #475569; color: #e2e8f0; }
-        .sector-pill:not(.active) { opacity: 0.35; }
+        .sector-pill.compared .pill-left { color: #60a5fa; background: #1e3a5f; }
+        .sector-pill.compared { border-color: #1d4ed8; }
+        .sector-pill.no-drill .pill-right { display: none; }
 
         /* Chart container — needs position:relative for SVG overlay */
         .chart-wrap { position: relative; }
@@ -305,6 +305,8 @@
     let drillSnapshots = [];         // raw industry snapshots from API
     let visibleIndustries = new Set();
     let drillLoading = false;
+    let comparedItems = new Set();  // names currently in comparison
+    let comparedData = new Map();   // name -> { dates: [], values: [], color: string }
 
     function industryColor(name) {
         // Deterministic HSL color from name hash
@@ -332,6 +334,41 @@
                 return_4w:    ind.return_4w,
             })),
         };
+    }
+
+    function addToComparison(name, color) {
+        if (comparedItems.has(name)) {
+            comparedItems.delete(name);
+            comparedData.delete(name);
+        } else {
+            comparedItems.add(name);
+            let dates = [], values = [];
+            const isSector = !!SECTOR_COLORS[name];
+            if (isSector && etfData?.sectors?.[name]) {
+                dates = etfData.sectors[name].dates;
+                values = etfData.sectors[name].values;
+            } else if (!isSector && drillSnapshots.length > 0) {
+                // Industry: compute cumulative return from drillSnapshots
+                let cum = 1;
+                drillSnapshots.forEach(s => {
+                    const ind = s.industries.find(i => i.industry === name);
+                    if (ind) {
+                        const w = Math.pow(1 + ind.return_4w / 100, 1 / 4) - 1;
+                        cum *= (1 + w);
+                        dates.push(s.date);
+                        values.push(parseFloat(((cum - 1) * 100).toFixed(2)));
+                    }
+                });
+            }
+            comparedData.set(name, { dates, values, color });
+        }
+        // Update pill visual
+        document.querySelectorAll(`.sector-pill[data-sector]`).forEach(pill => {
+            if (pill.dataset.sector === name) {
+                pill.classList.toggle('compared', comparedItems.has(name));
+            }
+        });
+        renderComparisonPanel();
     }
 
     function fmtReturn(v) {
@@ -609,11 +646,20 @@
         container.innerHTML = '';
         Object.entries(SECTOR_COLORS).forEach(([sector, color]) => {
             const pill = document.createElement('div');
-            pill.className = 'sector-pill active';
+            pill.className = 'sector-pill' + (comparedItems.has(sector) ? ' compared' : '');
             pill.dataset.sector = sector;
-            pill.title = `Click to drill into ${sector} industries`;
-            pill.innerHTML = `<span class="pill-dot" style="background:${color}"></span>${sector} ▾`;
-            pill.addEventListener('click', () => enterDrill(sector));
+            pill.title = `Click name to compare; ▾ to drill into industries`;
+            pill.innerHTML = `
+                <div class="pill-left"><span class="pill-dot" style="background:${color}"></span>${sector}</div>
+                <div class="pill-right" title="Drill into industries">▾</div>`;
+            pill.querySelector('.pill-left').addEventListener('click', (e) => {
+                e.stopPropagation();
+                addToComparison(sector, color);
+            });
+            pill.querySelector('.pill-right').addEventListener('click', (e) => {
+                e.stopPropagation();
+                enterDrill(sector);
+            });
             container.appendChild(pill);
         });
         container.style.display = '';
@@ -625,20 +671,34 @@
         industries.forEach(name => {
             const color = getItemColor(name);
             const pill = document.createElement('div');
-            pill.className = 'sector-pill active';
+            pill.className = 'sector-pill no-drill' + (comparedItems.has(name) ? ' compared' : '');
             pill.dataset.sector = name;
-            pill.innerHTML = `<span class="pill-dot" style="background:${color}"></span>${name}`;
-            pill.addEventListener('click', () => {
+            pill.innerHTML = `
+                <div class="pill-left"><span class="pill-dot" style="background:${color}"></span>${name}</div>
+                <div class="pill-right"></div>`;
+            // Left click: toggle RRG visibility
+            pill.querySelector('.pill-left').addEventListener('click', (e) => {
+                e.stopPropagation();
                 if (visibleIndustries.has(name)) {
                     visibleIndustries.delete(name);
-                    pill.classList.remove('active');
+                    pill.querySelector('.pill-left').style.opacity = '0.4';
                 } else {
                     visibleIndustries.add(name);
-                    pill.classList.add('active');
+                    pill.querySelector('.pill-left').style.opacity = '';
                 }
                 if (chart) chart.updateSeries(buildSeries(playSnapshots[currentIdx].sectors), false);
                 drawTrails();
             });
+            // Right-click or long-press: add to comparison
+            let pressTimer;
+            pill.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                addToComparison(name, color);
+                pill.classList.toggle('compared', comparedItems.has(name));
+            });
+            pill.addEventListener('mousedown', () => { pressTimer = setTimeout(() => addToComparison(name, color), 600); });
+            pill.addEventListener('mouseup', () => clearTimeout(pressTimer));
+            pill.addEventListener('mouseleave', () => clearTimeout(pressTimer));
             container.appendChild(pill);
         });
         container.style.display = '';
