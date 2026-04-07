@@ -76,7 +76,8 @@ class DailyUpdater:
         # Ideally we want to fill gaps. 
         # Strategy: Fetch from (Today - 3 days) to Today. 
         # The DB 'upsert' logic handles duplicates, so slight overlap is cleaner than missing data.
-        end_date = datetime.now().strftime('%Y-%m-%d')
+        # yfinance end is exclusive, so use tomorrow to include today's closing prices
+        end_date = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
         start_date = self.get_last_update_date()
         
         print(f"Update Range: {start_date} -> {end_date}")
