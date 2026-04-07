@@ -5,6 +5,9 @@ from sqlalchemy import text
 from datetime import datetime, timedelta
 import time
 from tqdm import tqdm
+import subprocess
+import sys
+from pathlib import Path
 
 class DailyUpdater:
     def __init__(self):
@@ -42,6 +45,19 @@ class DailyUpdater:
                 return next_day.strftime('%Y-%m-%d')
             else:
                 return "2024-01-01"
+
+    def _warmup_industry_cache(self):
+        """Pre-generate industry rotation history for all 11 sectors."""
+        from generate_rotation_history import ALL_SECTORS
+        script = Path(__file__).parent / "generate_industry_rotation_history.py"
+        print("\n--- Warming up industry rotation cache ---")
+        for sector in ALL_SECTORS:
+            print(f"  Generating {sector}…")
+            subprocess.run(
+                [sys.executable, str(script), "--sector", sector, "--force"],
+                check=False,
+            )
+        print("--- Warm-up complete ---")
 
     def run(self):
         print("--- Starting Daily Stock Update ---")
@@ -128,6 +144,7 @@ class DailyUpdater:
         print(f"Skipped:   {skip_count} (No new data)")
         print(f"Delisted:  {delisted_count} (Removed from DB)")
         print(f"Errors:    {error_count}")
+        self._warmup_industry_cache()
 
 if __name__ == "__main__":
     updater = DailyUpdater()
