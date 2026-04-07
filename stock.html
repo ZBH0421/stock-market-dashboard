@@ -404,23 +404,23 @@
                     <div class="rrg-row">
                         <div class="rrg-block">
                             <div class="rrg-block-label">Sector</div>
-                            <div class="rrg-block-name" title="${data.sector}">${data.sector}</div>
+                            <div class="rrg-block-name" title="${esc(data.sector)}">${esc(data.sector)}</div>
                             ${sr ? `
                                 ${quadrantBadge(sr.quadrant)}
                                 <div class="rrg-stat">RS-Ratio: <span>${fmtVal(sr.rs_ratio)}</span></div>
                                 <div class="rrg-stat">RS-Mom: <span>${fmtVal(sr.rs_momentum)}</span></div>
                                 <div class="rrg-stat">13W: <span>${fmtRet(sr.return_13w)}</span> &nbsp; 4W: <span>${fmtRet(sr.return_4w)}</span></div>
-                            ` : '<div class="rrg-stat" style="color:#64748b;">No data yet</div>'}
+                            ` : '<div class="rrg-stat" style="color:var(--text-secondary);">No data yet</div>'}
                         </div>
                         <div class="rrg-block">
                             <div class="rrg-block-label">Industry</div>
-                            <div class="rrg-block-name" title="${data.industry}">${data.industry}</div>
+                            <div class="rrg-block-name" title="${esc(data.industry)}">${esc(data.industry)}</div>
                             ${ir ? `
                                 ${quadrantBadge(ir.quadrant_market)}
                                 <div class="rrg-stat">RS-Ratio: <span>${fmtVal(ir.rs_ratio_market)}</span></div>
                                 <div class="rrg-stat">RS-Mom: <span>${fmtVal(ir.rs_momentum_market)}</span></div>
                                 <div class="rrg-stat">13W: <span>${fmtRet(ir.return_13w)}</span> &nbsp; 4W: <span>${fmtRet(ir.return_4w)}</span></div>
-                            ` : '<div class="rrg-stat" style="color:#64748b;">No data yet</div>'}
+                            ` : '<div class="rrg-stat" style="color:var(--text-secondary);">No data yet</div>'}
                         </div>
                     </div>
                     <a href="rotation.html" class="rrg-link">View Sector Rotation →</a>
