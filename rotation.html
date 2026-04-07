@@ -368,7 +368,7 @@
                 pill.classList.toggle('compared', comparedItems.has(name));
             }
         });
-        renderComparisonPanel();
+        if (typeof renderComparisonPanel === 'function') renderComparisonPanel();
     }
 
     function fmtReturn(v) {
@@ -694,7 +694,6 @@
             pill.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
                 addToComparison(name, color);
-                pill.classList.toggle('compared', comparedItems.has(name));
             });
             pill.addEventListener('mousedown', () => { pressTimer = setTimeout(() => addToComparison(name, color), 600); });
             pill.addEventListener('mouseup', () => clearTimeout(pressTimer));
