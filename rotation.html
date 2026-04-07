@@ -235,6 +235,17 @@
             </div>
         </div>
 
+        <!-- Sector / Industry comparison panel -->
+        <div class="card mb-4" id="comparisonCard" style="display:none;">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <span>Comparison <span class="text-secondary fw-normal" style="font-size:0.8rem;" id="comparisonSubtitle">vs SPY</span></span>
+                <button id="clearComparison" style="background:transparent;border:1px solid #334155;border-radius:6px;color:#94a3b8;font-size:11px;padding:3px 10px;cursor:pointer;">清除全部</button>
+            </div>
+            <div class="card-body p-2">
+                <div id="comparisonChart"></div>
+            </div>
+        </div>
+
         <!-- Sector ranking table -->
         <div class="card">
             <div class="card-header d-flex align-items-center gap-2">
@@ -1051,6 +1062,79 @@
         document.getElementById('etfChartCard').style.display = '';
     }
 
+    let comparisonChart = null;
+
+    function renderComparisonPanel() {
+        const card = document.getElementById('comparisonCard');
+        if (comparedItems.size === 0) {
+            card.style.display = 'none';
+            if (comparisonChart) { comparisonChart.destroy(); comparisonChart = null; }
+            return;
+        }
+        card.style.display = '';
+
+        const series = [];
+        const colors = [];
+
+        // SPY baseline always present if available
+        if (etfData?.benchmarks?.SPY) {
+            const d = etfData.benchmarks.SPY;
+            series.push({ name: 'SPY', data: d.dates.map((dt, i) => ({ x: new Date(dt).getTime(), y: d.values[i] })) });
+            colors.push('#f1f5f9');
+        }
+
+        comparedData.forEach(({ dates, values, color }, name) => {
+            if (dates.length === 0) return;
+            series.push({
+                name,
+                data: dates.map((dt, i) => ({ x: new Date(dt).getTime(), y: values[i] })),
+            });
+            colors.push(color);
+        });
+
+        const subtitle = Array.from(comparedItems).join(', ');
+        document.getElementById('comparisonSubtitle').textContent = subtitle.length > 60 ? subtitle.slice(0, 57) + '…' : subtitle;
+
+        const dashArray = series.map(s => s.name === 'SPY' ? 4 : 0);
+
+        if (comparisonChart) {
+            comparisonChart.updateOptions({
+                series,
+                colors,
+                stroke: { width: 2, curve: 'smooth', dashArray },
+            }, true, false);
+            return;
+        }
+
+        comparisonChart = new ApexCharts(document.getElementById('comparisonChart'), {
+            chart: {
+                type: 'line', height: 260, background: '#1e293b',
+                toolbar: { show: false }, animations: { enabled: false },
+                zoom: { enabled: false },
+            },
+            series,
+            colors,
+            stroke: { width: 2, curve: 'smooth', dashArray },
+            xaxis: { type: 'datetime', labels: { style: { colors: '#64748b' }, datetimeUTC: false } },
+            yaxis: {
+                labels: {
+                    style: { colors: '#64748b' },
+                    formatter: v => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`,
+                },
+            },
+            tooltip: {
+                theme: 'dark',
+                y: { formatter: v => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%` },
+                x: { format: 'yyyy-MM-dd' },
+            },
+            legend: { position: 'top', labels: { colors: '#94a3b8' } },
+            grid: { borderColor: '#334155' },
+            annotations: { yaxis: [{ y: 0, borderColor: '#475569', strokeDashArray: 4 }] },
+            theme: { mode: 'dark' },
+        });
+        comparisonChart.render();
+    }
+
     function updateEtfMarker(dateStr) {
         if (!etfChart) return;
         const ts = new Date(dateStr).getTime();
@@ -1078,6 +1162,13 @@
         document.getElementById('qqqCheck').classList.toggle('checked', this.checked);
         if (etfChart) { etfChart.destroy(); etfChart = null; }
         renderEtfChart();
+    });
+
+    document.getElementById('clearComparison').addEventListener('click', () => {
+        comparedItems.clear();
+        comparedData.clear();
+        document.querySelectorAll('.sector-pill.compared').forEach(p => p.classList.remove('compared'));
+        renderComparisonPanel();
     });
 
     // ETF range buttons
