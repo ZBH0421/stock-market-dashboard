@@ -16,7 +16,8 @@ def test_warmup_called_for_all_sectors():
 
     with patch("subprocess.run") as mock_run:
         updater._warmup_industry_cache()
-        assert mock_run.call_count == 11
+        from generate_rotation_history import ALL_SECTORS
+        assert mock_run.call_count == len(ALL_SECTORS)
         called_sectors = [c.args[0][3] for c in mock_run.call_args_list]
         assert "Energy" in called_sectors
         assert "Information Technology" in called_sectors

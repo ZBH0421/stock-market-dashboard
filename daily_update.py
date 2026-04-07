@@ -8,6 +8,7 @@ from tqdm import tqdm
 import subprocess
 import sys
 from pathlib import Path
+from generate_rotation_history import ALL_SECTORS as _ALL_SECTORS
 
 class DailyUpdater:
     def __init__(self):
@@ -48,15 +49,16 @@ class DailyUpdater:
 
     def _warmup_industry_cache(self):
         """Pre-generate industry rotation history for all 11 sectors."""
-        from generate_rotation_history import ALL_SECTORS
         script = Path(__file__).parent / "generate_industry_rotation_history.py"
         print("\n--- Warming up industry rotation cache ---")
-        for sector in ALL_SECTORS:
+        for sector in _ALL_SECTORS:
             print(f"  Generating {sector}…")
-            subprocess.run(
+            result = subprocess.run(
                 [sys.executable, str(script), "--sector", sector, "--force"],
                 check=False,
             )
+            if result.returncode != 0:
+                print(f"  WARNING: warm-up failed for {sector} (exit {result.returncode})")
         print("--- Warm-up complete ---")
 
     def run(self):
