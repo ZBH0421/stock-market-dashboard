@@ -306,6 +306,10 @@
         Leading: '#4ade80', Weakening: '#fb923c',
         Lagging: '#f87171', Improving: '#60a5fa',
     };
+    function esc(s) {
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
     const SECTOR_COLORS = {
         'Communication Services': '#f472b6',
         'Consumer Discretionary': '#fb923c',
