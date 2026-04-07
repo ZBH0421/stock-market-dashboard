@@ -88,5 +88,5 @@ def test_returns_202_when_cache_missing():
         mock_conn.execute.return_value.fetchone.return_value = ("Oil & Gas Integrated",)
         with patch("subprocess.Popen"):
             res = client.get("/api/stock-rrg-position?ticker=XOM")
-    assert res.status_code in (200, 202)
+    assert res.status_code == 202
     _clear_caches()

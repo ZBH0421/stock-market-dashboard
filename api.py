@@ -1308,7 +1308,7 @@ def get_stock_rrg_position(ticker: str):
     import sys
     from pathlib import Path
     from fastapi.responses import JSONResponse
-    from generate_rotation_history import GICS_MAP
+
 
     ticker = ticker.upper()
 
@@ -1328,7 +1328,7 @@ def get_stock_rrg_position(ticker: str):
         raise HTTPException(status_code=404, detail=f"Ticker {ticker!r} not found")
 
     industry_name = row[0]
-    sector_name = GICS_MAP.get(industry_name)
+    sector_name = _GICS_MAP.get(industry_name)
     if not sector_name:
         raise HTTPException(status_code=404, detail=f"No GICS sector for industry {industry_name!r}")
 
