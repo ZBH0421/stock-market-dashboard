@@ -1295,5 +1295,120 @@ def get_industry_rotation_history(sector: str):
     })
 
 
+@app.get("/api/stock-rrg-position")
+def get_stock_rrg_position(ticker: str):
+    """
+    Returns the current RRG position (sector + industry) for a given ticker.
+    Reads from today's cached rotation history files.
+    Returns 200 with data if caches exist, 202 if industry cache is being generated.
+    """
+    import json as _json
+    import datetime
+    import subprocess
+    import sys
+    from pathlib import Path
+    from fastapi.responses import JSONResponse
+    from generate_rotation_history import GICS_MAP
+
+    ticker = ticker.upper()
+
+    # 1. Look up industry from DB
+    with db.engine.connect() as conn:
+        row = conn.execute(
+            text("""
+                SELECT i.name
+                FROM tickers t
+                JOIN industries i ON t.industry_id = i.id
+                WHERE t.ticker = :ticker
+            """),
+            {"ticker": ticker},
+        ).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Ticker {ticker!r} not found")
+
+    industry_name = row[0]
+    sector_name = GICS_MAP.get(industry_name)
+    if not sector_name:
+        raise HTTPException(status_code=404, detail=f"No GICS sector for industry {industry_name!r}")
+
+    def _slug(s):
+        return s.lower().replace(" ", "_").replace("&", "and")
+
+    today = datetime.date.today().isoformat()
+
+    # 2. Read sector RRG from cache
+    sector_cache = Path(f"/tmp/sector_rotation_history_{today}.json")
+    sector_rrg = None
+    if sector_cache.exists():
+        try:
+            data = _json.loads(sector_cache.read_text())
+            snaps = data.get("snapshots", [])
+            if snaps:
+                last = snaps[-1]
+                for s in last.get("sectors", []):
+                    if s["sector"] == sector_name:
+                        sector_rrg = {
+                            "rs_ratio": s["rs_ratio"],
+                            "rs_momentum": s["rs_momentum"],
+                            "quadrant": s["quadrant"],
+                            "return_13w": s["return_13w"],
+                            "return_4w": s["return_4w"],
+                            "date": last["date"],
+                        }
+                        break
+        except (ValueError, OSError):
+            pass
+
+    # 3. Read industry RRG from cache
+    ind_cache = Path(f"/tmp/industry_rotation_history_{_slug(sector_name)}_{today}.json")
+    industry_rrg = None
+    if ind_cache.exists():
+        try:
+            data = _json.loads(ind_cache.read_text())
+            snaps = data.get("snapshots", [])
+            if snaps:
+                last = snaps[-1]
+                for ind in last.get("industries", []):
+                    if ind["industry"] == industry_name:
+                        industry_rrg = {
+                            "rs_ratio_market": ind["rs_ratio_market"],
+                            "rs_momentum_market": ind["rs_momentum_market"],
+                            "quadrant_market": ind["quadrant_market"],
+                            "rs_ratio_sector": ind["rs_ratio_sector"],
+                            "rs_momentum_sector": ind["rs_momentum_sector"],
+                            "quadrant_sector": ind["quadrant_sector"],
+                            "return_13w": ind["return_13w"],
+                            "return_4w": ind["return_4w"],
+                            "stock_count": ind["stock_count"],
+                            "date": last["date"],
+                        }
+                        break
+        except (ValueError, OSError):
+            pass
+    elif sector_name in _ROTATION_ALL_SECTORS:
+        # Trigger background generation
+        script = Path(__file__).parent / "generate_industry_rotation_history.py"
+        subprocess.Popen(
+            [sys.executable, str(script), "--sector", sector_name],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+
+    if not sector_rrg and not industry_rrg:
+        return JSONResponse(status_code=202, content={
+            "status": "generating",
+            "sector": sector_name,
+            "industry": industry_name,
+        })
+
+    return {
+        "ticker": ticker,
+        "sector": sector_name,
+        "industry": industry_name,
+        "sector_rrg": sector_rrg,
+        "industry_rrg": industry_rrg,
+    }
+
+
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
