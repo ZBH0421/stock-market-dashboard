@@ -363,6 +363,8 @@
             comparedData.set(name, { dates, values, color });
         }
         // Update pill visual
+        // data-sector is unique per pill in both sector and industry views;
+        // sector/industry name collisions are not expected in practice.
         document.querySelectorAll(`.sector-pill[data-sector]`).forEach(pill => {
             if (pill.dataset.sector === name) {
                 pill.classList.toggle('compared', comparedItems.has(name));
@@ -779,6 +781,15 @@
     }
 
     function exitDrill() {
+        // Clear industry comparison entries when exiting drill
+        for (const name of [...comparedItems]) {
+            if (!SECTOR_COLORS[name]) {
+                comparedItems.delete(name);
+                comparedData.delete(name);
+            }
+        }
+        if (typeof renderComparisonPanel === 'function') renderComparisonPanel();
+
         stopPlay();
         drillSector = null;
         drillBenchmark = 'market';
