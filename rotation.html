@@ -110,6 +110,12 @@
         .bm-check.spy input { accent-color: #f1f5f9; }
         .bm-check.qqq input { accent-color: #fb923c; }
         .bm-check.checked { border-color: #475569; color: #e2e8f0; }
+        /* Custom date range picker */
+        .date-range-wrap { display: none; align-items: center; gap: 6px; font-size: 11px; color: #94a3b8; }
+        .date-range-wrap.visible { display: flex; }
+        .date-input { background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; padding: 3px 7px; font-size: 11px; width: 120px; }
+        .date-confirm-btn { background: #1d4ed8; color: #fff; border: none; border-radius: 6px; padding: 3px 10px; font-size: 11px; cursor: pointer; }
+        .date-confirm-btn:hover { background: #2563eb; }
     </style>
 </head>
 <body>
@@ -158,11 +164,18 @@
                 <span id="trailLabel">8週</span>
             </div>
 
-            <div class="d-flex gap-1">
+            <div class="d-flex align-items-center gap-1 flex-wrap">
                 <button class="range-btn" data-weeks="13">3M</button>
                 <button class="range-btn" data-weeks="26">6M</button>
                 <button class="range-btn active" data-weeks="52">1Y</button>
                 <button class="range-btn" data-weeks="0">全部</button>
+                <button class="range-btn" id="customRangeBtn">自訂</button>
+                <div class="date-range-wrap" id="dateRangeWrap">
+                    <input type="date" class="date-input" id="dateStart">
+                    <span>→</span>
+                    <input type="date" class="date-input" id="dateEnd">
+                    <button class="date-confirm-btn" id="dateConfirm">確認</button>
+                </div>
             </div>
 
             <div class="benchmark-toggle" id="benchmarkToggle" style="display:none;">
@@ -764,12 +777,42 @@
             drawTrails();
         });
 
-        document.querySelectorAll('.range-btn').forEach(btn => {
+        document.querySelectorAll('.range-btn[data-weeks]').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 setTimeRange(parseInt(btn.dataset.weeks));
             });
+        });
+
+        // Custom date range
+        document.getElementById('customRangeBtn').addEventListener('click', () => {
+            const wrap = document.getElementById('dateRangeWrap');
+            const visible = wrap.classList.toggle('visible');
+            if (visible && allSnapshots.length > 0) {
+                const dates = allSnapshots.map(s => s.date);
+                document.getElementById('dateStart').min = dates[0];
+                document.getElementById('dateStart').max = dates[dates.length - 1];
+                document.getElementById('dateStart').value = dates[Math.max(0, dates.length - 52)];
+                document.getElementById('dateEnd').min = dates[0];
+                document.getElementById('dateEnd').max = dates[dates.length - 1];
+                document.getElementById('dateEnd').value = dates[dates.length - 1];
+            }
+            if (visible) {
+                document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+                document.getElementById('customRangeBtn').classList.add('active');
+            }
+        });
+
+        document.getElementById('dateConfirm').addEventListener('click', () => {
+            const start = document.getElementById('dateStart').value;
+            const end = document.getElementById('dateEnd').value;
+            if (!start || !end || start > end) return;
+            stopPlay();
+            playSnapshots = allSnapshots.filter(s => s.date >= start && s.date <= end);
+            if (playSnapshots.length === 0) playSnapshots = allSnapshots.slice(-1);
+            currentIdx = playSnapshots.length - 1;
+            renderFrame(currentIdx);
         });
 
         initTimelineDrag();
