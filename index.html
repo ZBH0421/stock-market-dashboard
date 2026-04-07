@@ -14,9 +14,15 @@
 <body class="bg-[#09090b] text-[#fafafa] min-h-screen">
 
   <!-- Navbar -->
-  <nav class="border-b border-zinc-800 bg-[#09090b] sticky top-0 z-20">
+  <nav style="background:#1e293b;border-bottom:1px solid #334155;position:sticky;top:0;z-index:20;">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-      <span class="font-semibold text-sm tracking-tight">Market Dashboard</span>
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <span class="font-semibold text-sm tracking-tight" style="color:#f8fafc;">Market Dashboard</span>
+        <a href="stocks.html"    style="color:#94a3b8;font-size:0.85rem;text-decoration:none;" onmouseover="this.style.color='#f8fafc'" onmouseout="this.style.color='#94a3b8'">Stocks</a>
+        <a href="pe_history.html" style="color:#94a3b8;font-size:0.85rem;text-decoration:none;" onmouseover="this.style.color='#f8fafc'" onmouseout="this.style.color='#94a3b8'">PE History</a>
+        <a href="brief.html"     style="color:#94a3b8;font-size:0.85rem;text-decoration:none;" onmouseover="this.style.color='#f8fafc'" onmouseout="this.style.color='#94a3b8'">Daily Brief</a>
+        <a href="rotation.html"  style="color:#94a3b8;font-size:0.85rem;text-decoration:none;" onmouseover="this.style.color='#f8fafc'" onmouseout="this.style.color='#94a3b8'">Sector Rotation</a>
+      </div>
       <span id="last-updated" class="text-zinc-600 text-xs"></span>
     </div>
   </nav>
