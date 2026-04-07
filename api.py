@@ -1182,6 +1182,11 @@ SECTOR_ETFS = {
     "Utilities": "XLU",
 }
 
+BENCHMARK_ETFS = {
+    "SPY": "SPY",
+    "QQQ": "QQQ",
+}
+
 @app.get("/api/sector-etf-prices")
 def get_sector_etf_prices(period: str = "1Y"):
     """
@@ -1210,7 +1215,7 @@ def get_sector_etf_prices(period: str = "1Y"):
     end = datetime.date.today()
     start = (end - datetime.timedelta(days=days)).isoformat() if days < 9999 else "2018-01-01"
 
-    tickers = list(SECTOR_ETFS.values())
+    tickers = list(SECTOR_ETFS.values()) + list(BENCHMARK_ETFS.values())
     try:
         raw = yf.download(tickers, start=start, end=end.isoformat(),
                           auto_adjust=True, progress=False, multi_level_index=True)
@@ -1221,7 +1226,7 @@ def get_sector_etf_prices(period: str = "1Y"):
     if closes.empty:
         raise HTTPException(status_code=502, detail="No ETF data returned")
 
-    result = {"period": period, "sectors": {}}
+    result = {"period": period, "sectors": {}, "benchmarks": {}}
     for sector, etf in SECTOR_ETFS.items():
         if etf not in closes.columns:
             continue
@@ -1232,6 +1237,19 @@ def get_sector_etf_prices(period: str = "1Y"):
         pct = ((series - base) / base * 100).round(2)
         result["sectors"][sector] = {
             "etf": etf,
+            "dates": [d.strftime("%Y-%m-%d") for d in pct.index],
+            "values": pct.tolist(),
+        }
+
+    for name, etf in BENCHMARK_ETFS.items():
+        if etf not in closes.columns:
+            continue
+        series = closes[etf].dropna()
+        if series.empty:
+            continue
+        base = series.iloc[0]
+        pct = ((series - base) / base * 100).round(2)
+        result["benchmarks"][name] = {
             "dates": [d.strftime("%Y-%m-%d") for d in pct.index],
             "values": pct.tolist(),
         }
