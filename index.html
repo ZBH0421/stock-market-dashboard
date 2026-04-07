@@ -29,6 +29,22 @@
 
   <div class="max-w-7xl mx-auto px-4 py-5 space-y-4">
 
+    <!-- Ticker Search -->
+    <div class="flex items-center gap-2">
+      <div class="relative flex-1 max-w-xs">
+        <input id="ticker-input" type="text" placeholder="輸入股票代碼 e.g. AAPL"
+               autocomplete="off" autocapitalize="characters" spellcheck="false"
+               class="w-full bg-[#18181b] border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 outline-none focus:border-zinc-600"
+               style="text-transform:uppercase;"
+               onkeydown="if(event.key==='Enter')lookupTicker()">
+      </div>
+      <button onclick="lookupTicker()"
+              class="bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-sm px-4 py-2 rounded-lg transition-colors">
+        查詢
+      </button>
+      <span id="ticker-result" class="text-xs text-zinc-500"></span>
+    </div>
+
     <!-- Period Selector -->
     <div id="period-selector" class="flex items-center gap-1.5 flex-wrap"></div>
 
@@ -383,6 +399,43 @@
     state.selectedSector = null;
     renderPeriodSelector();
     loadData();
+  }
+
+  // ─── Ticker Lookup ────────────────────────────────────────────────────────
+  async function lookupTicker() {
+    const input = document.getElementById('ticker-input');
+    const result = document.getElementById('ticker-result');
+    const ticker = input.value.trim().toUpperCase();
+    if (!ticker) return;
+
+    result.textContent = '查詢中…';
+    result.style.color = '#71717a';
+
+    try {
+      const res = await fetch(`/api/stock-rrg-position?ticker=${encodeURIComponent(ticker)}`);
+      if (res.status === 404) {
+        result.textContent = `找不到 ${ticker}`;
+        result.style.color = '#f87171';
+        return;
+      }
+      const data = await res.json();
+      if (!data.sector) {
+        result.textContent = '查詢失敗，請稍後再試';
+        result.style.color = '#f87171';
+        return;
+      }
+
+      result.innerHTML = `<span style="color:#94a3b8">${ticker}</span> <span style="color:#71717a">→</span> <span style="color:#60a5fa">${esc(data.sector)}</span> <span style="color:#71717a">→</span> <span style="color:#94a3b8">${esc(data.industry)}</span>`;
+
+      // Ensure data is loaded then select the sector
+      if (state.sectorData.length === 0) await loadData();
+      selectSector(data.sector);
+      // Scroll to grid
+      document.getElementById('sector-grid').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (e) {
+      result.textContent = '查詢失敗';
+      result.style.color = '#f87171';
+    }
   }
 
   // ─── Boot ─────────────────────────────────────────────────────────────────
