@@ -103,6 +103,13 @@
             background: transparent; border: none; cursor: pointer; transition: background .15s;
         }
         .benchmark-btn.active { background: #1d4ed8; color: #fff; }
+
+        /* Benchmark overlay checkboxes */
+        .bm-check { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: #94a3b8; cursor: pointer; padding: 3px 8px; border: 1px solid #334155; border-radius: 6px; background: transparent; user-select: none; }
+        .bm-check input { accent-color: #94a3b8; cursor: pointer; }
+        .bm-check.spy input { accent-color: #f1f5f9; }
+        .bm-check.qqq input { accent-color: #fb923c; }
+        .bm-check.checked { border-color: #475569; color: #e2e8f0; }
     </style>
 </head>
 <body>
@@ -195,11 +202,19 @@
         <div class="card mb-4" id="etfChartCard" style="display:none;">
             <div class="card-header d-flex align-items-center justify-content-between">
                 <span>Sector ETF Performance</span>
-                <div class="d-flex gap-1" id="etfRangeBtns">
-                    <button class="range-btn" data-etf-period="3M">3M</button>
-                    <button class="range-btn active" data-etf-period="1Y">1Y</button>
-                    <button class="range-btn" data-etf-period="3Y">3Y</button>
-                    <button class="range-btn" data-etf-period="ALL">全部</button>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <div class="d-flex gap-1" id="etfRangeBtns">
+                        <button class="range-btn" data-etf-period="3M">3M</button>
+                        <button class="range-btn active" data-etf-period="1Y">1Y</button>
+                        <button class="range-btn" data-etf-period="3Y">3Y</button>
+                        <button class="range-btn" data-etf-period="ALL">全部</button>
+                    </div>
+                    <label class="bm-check spy" id="spyCheck">
+                        <input type="checkbox" id="spyCheckbox"> SPY
+                    </label>
+                    <label class="bm-check qqq" id="qqqCheck">
+                        <input type="checkbox" id="qqqCheckbox"> QQQ
+                    </label>
                 </div>
             </div>
             <div class="card-body p-2">
@@ -845,8 +860,27 @@
             .filter(([sector]) => visibleSectors.has(sector))
             .map(([sector]) => SECTOR_COLORS[sector] || '#94a3b8');
 
+        // Add benchmark overlays if checked
+        const spyChecked = document.getElementById('spyCheckbox')?.checked;
+        const qqqChecked = document.getElementById('qqqCheckbox')?.checked;
+        const bmColors = [];
+
+        if (spyChecked && etfData.benchmarks?.SPY) {
+            const d = etfData.benchmarks.SPY;
+            series.push({ name: 'SPY', data: d.dates.map((dt, i) => ({ x: new Date(dt).getTime(), y: d.values[i] })) });
+            bmColors.push('#f1f5f9');
+        }
+        if (qqqChecked && etfData.benchmarks?.QQQ) {
+            const d = etfData.benchmarks.QQQ;
+            series.push({ name: 'QQQ', data: d.dates.map((dt, i) => ({ x: new Date(dt).getTime(), y: d.values[i] })) });
+            bmColors.push('#fb923c');
+        }
+
+        const allColors = [...colors, ...bmColors];
+        const dashArray = series.map(s => (s.name === 'SPY' || s.name === 'QQQ') ? 4 : 0);
+
         if (etfChart) {
-            etfChart.updateOptions({ series, colors }, true, false);
+            etfChart.updateOptions({ series, colors: allColors, stroke: { width: 2, curve: 'smooth', dashArray } }, true, false);
             return;
         }
 
@@ -857,8 +891,8 @@
                 zoom: { enabled: false },
             },
             series,
-            colors,
-            stroke: { width: 2, curve: 'smooth' },
+            colors: allColors,
+            stroke: { width: 2, curve: 'smooth', dashArray },
             xaxis: { type: 'datetime', labels: { style: { colors: '#64748b' }, datetimeUTC: false } },
             yaxis: {
                 labels: {
@@ -897,6 +931,17 @@
             },
         }, false);
     }
+
+    document.getElementById('spyCheckbox').addEventListener('change', function() {
+        document.getElementById('spyCheck').classList.toggle('checked', this.checked);
+        if (etfChart) { etfChart.destroy(); etfChart = null; }
+        renderEtfChart();
+    });
+    document.getElementById('qqqCheckbox').addEventListener('change', function() {
+        document.getElementById('qqqCheck').classList.toggle('checked', this.checked);
+        if (etfChart) { etfChart.destroy(); etfChart = null; }
+        renderEtfChart();
+    });
 
     // ETF range buttons
     document.getElementById('etfRangeBtns').addEventListener('click', e => {
