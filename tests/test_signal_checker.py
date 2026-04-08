@@ -133,3 +133,30 @@ def test_no_signal_when_lagging_4():
         result = compute_signal([_snap(sectors)])
     assert result["level"] == "none"
     assert result["lagging"] == 4
+
+
+from fastapi.testclient import TestClient
+from api import app
+
+api_client = TestClient(app)
+
+
+def test_api_signal_status_returns_200():
+    with patch("signal_checker._fetch_vix", return_value=15.0):
+        res = api_client.get("/api/signal-status")
+    assert res.status_code == 200
+    data = res.json()
+    assert "level" in data
+    assert data["level"] in ("strong", "general", "none")
+    assert "lagging" in data
+    assert "improving" in data
+    assert "vix" in data
+    assert "message" in data
+    assert "updated_at" in data
+
+
+def test_api_signal_status_level_is_valid_string():
+    with patch("signal_checker._fetch_vix", return_value=22.0):
+        res = api_client.get("/api/signal-status")
+    assert res.status_code == 200
+    assert res.json()["level"] in ("strong", "general", "none")

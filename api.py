@@ -8,6 +8,8 @@ import uvicorn
 import os
 from dotenv import load_dotenv
 from generate_rotation_history import ALL_SECTORS as _ROTATION_ALL_SECTORS
+from signal_checker import compute_signal as _compute_signal
+from generate_rotation_history import compute_snapshots as _compute_rrg_snapshots
 
 # Load environment variables
 load_dotenv()
@@ -1166,6 +1168,19 @@ def get_sector_rotation_history():
         "status": "generating",
         "message": "Computing history snapshots, retry in 30 seconds.",
     })
+
+
+@app.get("/api/signal-status")
+def get_signal_status():
+    """
+    Returns the current RRG-based market bottom signal level.
+    Levels: 'strong' (VIX>20 + Lagging<=2), 'general' (broader condition), 'none'.
+    """
+    try:
+        snapshots = _compute_rrg_snapshots()
+        return _compute_signal(snapshots)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Signal computation failed: {e}")
 
 
 SECTOR_ETFS = {
