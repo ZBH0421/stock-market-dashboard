@@ -81,13 +81,55 @@ def test_strong_requires_vix_above_20():
 
 def test_vix_fetch_failure_falls_back_to_general_or_none():
     # VIX fetch throws → vix=None, never strong
+    # ALL_11 has Lagging=2, Improving=3, key_mom=2 so general conditions ARE met
     snapshot = _snap(ALL_11)
     with patch("signal_checker._fetch_vix", side_effect=Exception("network error")):
         result = compute_signal([snapshot])
-    assert result["level"] != "strong"
+    assert result["level"] == "general"
     assert result["vix"] is None
 
 
 def test_empty_snapshots_returns_none():
     result = compute_signal([])
     assert result["level"] == "none"
+
+
+def test_general_signal_fires_at_lagging_3():
+    # lagging=3 is still within the general threshold (<=3)
+    sectors = [
+        _sector("Communication Services", "Lagging"),
+        _sector("Consumer Discretionary", "Leading"),
+        _sector("Consumer Staples", "Leading"),
+        _sector("Energy", "Leading"),
+        _sector("Financials", "Improving"),
+        _sector("Health Care", "Leading"),
+        _sector("Industrials", "Improving"),
+        _sector("Information Technology", "Leading"),
+        _sector("Materials", "Improving"),
+        _sector("Real Estate", "Leading"),
+        _sector("Utilities", "Leading"),
+    ]
+    with patch("signal_checker._fetch_vix", return_value=15.0):
+        result = compute_signal([_snap(sectors)])
+    assert result["level"] == "general"
+    assert result["lagging"] == 1
+
+
+def test_no_signal_when_lagging_4():
+    sectors = [
+        _sector("Communication Services", "Lagging"),
+        _sector("Consumer Discretionary", "Lagging"),
+        _sector("Consumer Staples", "Lagging"),
+        _sector("Energy", "Lagging"),
+        _sector("Financials", "Improving"),
+        _sector("Health Care", "Leading"),
+        _sector("Industrials", "Improving"),
+        _sector("Information Technology", "Leading"),
+        _sector("Materials", "Improving"),
+        _sector("Real Estate", "Leading"),
+        _sector("Utilities", "Leading"),
+    ]
+    with patch("signal_checker._fetch_vix", return_value=15.0):
+        result = compute_signal([_snap(sectors)])
+    assert result["level"] == "none"
+    assert result["lagging"] == 4

@@ -14,7 +14,10 @@ _KEY_SECTORS = {"Real Estate", "Materials", "Industrials"}
 def _fetch_vix() -> float:
     """Fetch latest VIX close. Raises on failure."""
     data = yf.download("^VIX", period="5d", progress=False)
-    return float(data["Close"].iloc[-1])
+    close = data["Close"]
+    if hasattr(close, "columns"):
+        close = close.iloc[:, 0]
+    return float(close.iloc[-1])
 
 
 def compute_signal(snapshots: list) -> dict:
