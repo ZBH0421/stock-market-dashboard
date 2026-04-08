@@ -138,6 +138,34 @@
         <span class="text-info fw-semibold" style="font-size:0.9rem;">Sector Rotation</span>
     </nav>
 
+    <!-- Bottom Signal Banner -->
+    <div id="signal-banner" style="display:none;padding:8px 16px;text-align:center;font-size:0.85rem;border-bottom:1px solid transparent;transition:opacity 0.3s ease;opacity:0;">
+      <span id="signal-banner-text"></span>
+    </div>
+    <script>
+      (function() {
+        var STYLES = {
+          strong:  { bg: '#92400e', border: '#b45309', color: '#fde68a' },
+          general: { bg: '#1e3a5f', border: '#2563eb', color: '#93c5fd' },
+          none:    { bg: '#0f172a', border: '#1e293b', color: '#475569' },
+        };
+        fetch('/api/signal-status')
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            var banner = document.getElementById('signal-banner');
+            var text   = document.getElementById('signal-banner-text');
+            var s = STYLES[d.level] || STYLES.none;
+            banner.style.background        = s.bg;
+            banner.style.borderBottomColor = s.border;
+            banner.style.color             = s.color;
+            text.textContent               = d.message;
+            banner.style.display           = 'block';
+            setTimeout(function() { banner.style.opacity = '1'; }, 10);
+          })
+          .catch(function() {});
+      })();
+    </script>
+
     <div class="container-fluid py-4 px-4">
         <div class="mb-3">
             <h4 class="mb-0 fw-bold">Relative Rotation Graph</h4>
