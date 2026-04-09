@@ -6,18 +6,28 @@ Levels:
   "general" — Lagging<=3, Improving>=2, key_mom>=2   (historical ~85% success)
   "none"    — all other states
 """
+import time
 import yfinance as yf
 
 _KEY_SECTORS = {"Real Estate", "Materials", "Industrials"}
 
+_VIX_CACHE: dict = {}
+_VIX_TTL = 1800  # 30 minutes
+
 
 def _fetch_vix() -> float:
-    """Fetch latest VIX close. Raises on failure."""
+    """Fetch latest VIX close with 30-min cache. Raises on failure."""
+    now = time.time()
+    if _VIX_CACHE.get("ts") and now - _VIX_CACHE["ts"] < _VIX_TTL:
+        return _VIX_CACHE["value"]
     data = yf.download("^VIX", period="5d", progress=False)
     close = data["Close"]
     if hasattr(close, "columns"):
         close = close.iloc[:, 0]
-    return float(close.iloc[-1])
+    value = float(close.iloc[-1])
+    _VIX_CACHE["value"] = value
+    _VIX_CACHE["ts"] = now
+    return value
 
 
 def compute_signal(snapshots: list) -> dict:

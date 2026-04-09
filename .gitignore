@@ -26,3 +26,4 @@ PLOT/
 style_showcase/
 msft_test.csv
 .worktrees/
+.gstack/

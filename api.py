@@ -1175,9 +1175,22 @@ def get_signal_status():
     """
     Returns the current RRG-based market bottom signal level.
     Levels: 'strong' (VIX>20 + Lagging<=2), 'general' (broader condition), 'none'.
+    Reads today's cached rotation history if available to avoid recomputation.
     """
+    import datetime, json as _json
+    from pathlib import Path
+
     try:
-        snapshots = _compute_rrg_snapshots()
+        today = datetime.date.today().isoformat()
+        cache = Path(f"/tmp/sector_rotation_history_{today}.json")
+        if cache.exists():
+            try:
+                cached = _json.loads(cache.read_text())
+                snapshots = cached.get("snapshots", cached) if isinstance(cached, dict) else cached
+            except (ValueError, OSError):
+                snapshots = _compute_rrg_snapshots()
+        else:
+            snapshots = _compute_rrg_snapshots()
         return _compute_signal(snapshots)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Signal computation failed: {e}")
