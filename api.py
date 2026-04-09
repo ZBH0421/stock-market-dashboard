@@ -1139,10 +1139,11 @@ def get_sector_rotation():
 
 
 @app.get("/api/sector-rotation-history")
-def get_sector_rotation_history():
+def get_sector_rotation_history(interval: str = "weekly"):
     """
-    Returns all weekly RRG snapshots for animated playback.
-    Serves cache /tmp/sector_rotation_history_{date}.json if present today.
+    Returns all weekly or daily RRG snapshots for animated playback.
+    interval=weekly  → /tmp/sector_rotation_history_{date}.json  (default)
+    interval=daily   → /tmp/sector_rotation_history_daily_{date}.json
     Returns 202 {status: 'generating'} while computing.
     """
     import datetime, subprocess, sys
@@ -1150,8 +1151,12 @@ def get_sector_rotation_history():
     from fastapi.responses import JSONResponse
     import json as _json
 
+    if interval not in ("weekly", "daily"):
+        raise HTTPException(status_code=400, detail="interval must be 'weekly' or 'daily'")
+
     today = datetime.date.today().isoformat()
-    cache = Path(f"/tmp/sector_rotation_history_{today}.json")
+    suffix = "_daily" if interval == "daily" else ""
+    cache = Path(f"/tmp/sector_rotation_history{suffix}_{today}.json")
 
     if cache.exists():
         try:
@@ -1160,13 +1165,13 @@ def get_sector_rotation_history():
             cache.unlink(missing_ok=True)
 
     script = Path(__file__).parent / "generate_rotation_history.py"
-    subprocess.Popen(
-        [sys.executable, str(script), "--force"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )
+    args = [sys.executable, str(script), "--force"]
+    if interval == "daily":
+        args += ["--interval", "daily"]
+    subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return JSONResponse(status_code=202, content={
         "status": "generating",
-        "message": "Computing history snapshots, retry in 30 seconds.",
+        "message": f"Computing {interval} history snapshots, retry in 30 seconds.",
     })
 
 

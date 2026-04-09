@@ -50,6 +50,66 @@ def test_returns_202_when_no_cache():
     assert res.json()["status"] == "generating"
 
 
+def _write_fake_daily_cache(snapshots: list) -> Path:
+    today = datetime.date.today().isoformat()
+    cache = Path(f"/tmp/sector_rotation_history_daily_{today}.json")
+    cache.write_text(json.dumps({
+        "generated_at": today,
+        "interval": "daily",
+        "total_snapshots": len(snapshots),
+        "snapshots": snapshots,
+    }))
+    return cache
+
+
+def _clear_daily_cache():
+    today = datetime.date.today().isoformat()
+    Path(f"/tmp/sector_rotation_history_daily_{today}.json").unlink(missing_ok=True)
+    Path(f"/tmp/sector_rotation_history_daily_{today}.lock").unlink(missing_ok=True)
+
+
+def test_daily_returns_200_when_cache_exists():
+    fake = {
+        "date": "2025-01-01",
+        "week_index": 0,
+        "sectors": [{"sector": "Energy", "rs_ratio": 105.0, "rs_momentum": 102.0,
+                      "quadrant": "Leading", "return_13w": 5.0, "return_4w": 2.0}],
+    }
+    _write_fake_daily_cache([fake])
+    try:
+        res = client.get("/api/sector-rotation-history?interval=daily")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["interval"] == "daily"
+        assert data["total_snapshots"] == 1
+        assert data["snapshots"][0]["week_index"] == 0
+    finally:
+        _clear_daily_cache()
+
+
+def test_daily_returns_202_when_no_cache():
+    _clear_daily_cache()
+    res = client.get("/api/sector-rotation-history?interval=daily")
+    assert res.status_code == 202
+    assert res.json()["status"] == "generating"
+
+
+def test_weekly_unaffected_by_interval_param():
+    fake = {
+        "date": "2025-01-01",
+        "week_index": 0,
+        "sectors": [{"sector": "Energy", "rs_ratio": 105.0, "rs_momentum": 102.0,
+                      "quadrant": "Leading", "return_13w": 5.0, "return_4w": 2.0}],
+    }
+    _write_fake_cache([fake])
+    try:
+        res = client.get("/api/sector-rotation-history?interval=weekly")
+        assert res.status_code == 200
+        assert res.json()["snapshots"][0]["week_index"] == 0
+    finally:
+        _clear_cache()
+
+
 def test_snapshot_sector_fields():
     fake_snapshot = {
         "date": "2025-06-01",
