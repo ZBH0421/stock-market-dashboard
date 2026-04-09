@@ -181,8 +181,8 @@ def _weighted_return(ret_series: pd.Series, mcap_series: pd.Series) -> float | N
     return float((r * w).sum() / total_w)
 
 
-def compute_snapshots() -> list[dict]:
-    """Load all price data and compute RS-Ratio / RS-Momentum for every 5th trading day."""
+def compute_snapshots(step: int = 5) -> list[dict]:
+    """Load all price data and compute RS-Ratio / RS-Momentum for every step-th trading day."""
     db = MarketDataDB()
 
     with db.engine.connect() as conn:
@@ -213,9 +213,10 @@ def compute_snapshots() -> list[dict]:
     if len(dates) < 66:
         return []
 
+    index_key = "week_index" if step == 5 else "day_index"
     snapshots = []
-    week_index = 0
-    for t_idx in range(65, len(dates), 5):
+    point_index = 0
+    for t_idx in range(65, len(dates), step):
         date_t = dates[t_idx]
         date_4w = dates[t_idx - 20]
         date_13w = dates[t_idx - 65]
@@ -285,10 +286,10 @@ def compute_snapshots() -> list[dict]:
 
         snapshots.append({
             "date": date_t.strftime("%Y-%m-%d"),
-            "week_index": week_index,
+            index_key: point_index,
             "sectors": sectors_out,
         })
-        week_index += 1
+        point_index += 1
 
     return snapshots
 
@@ -299,10 +300,11 @@ def _atomic_write(path: Path, data: dict) -> None:
     tmp.rename(path)
 
 
-def generate(force: bool = False) -> None:
+def generate(force: bool = False, interval: str = "weekly") -> None:
     today = datetime.date.today().isoformat()
-    cache = Path(f"/tmp/sector_rotation_history_{today}.json")
-    lock = Path(f"/tmp/sector_rotation_history_{today}.lock")
+    suffix = "_daily" if interval == "daily" else ""
+    cache = Path(f"/tmp/sector_rotation_history{suffix}_{today}.json")
+    lock = Path(f"/tmp/sector_rotation_history{suffix}_{today}.lock")
 
     if cache.exists() and not force:
         return
@@ -317,9 +319,11 @@ def generate(force: bool = False) -> None:
 
     lock.write_text(str(os.getpid()))
     try:
-        snapshots = compute_snapshots()
+        step = 1 if interval == "daily" else 5
+        snapshots = compute_snapshots(step=step)
         result = {
             "generated_at": today,
+            "interval": interval,
             "total_snapshots": len(snapshots),
             "snapshots": snapshots,
         }
@@ -333,7 +337,8 @@ def generate(force: bool = False) -> None:
 
 if __name__ == "__main__":
     force = "--force" in sys.argv
-    print(f"Generating rotation history (force={force})...")
+    interval = "daily" if "--interval" in sys.argv and sys.argv[sys.argv.index("--interval") + 1] == "daily" else "weekly"
+    print(f"Generating rotation history (force={force}, interval={interval})...")
     t0 = time.time()
-    generate(force=force)
+    generate(force=force, interval=interval)
     print(f"Done in {time.time() - t0:.1f}s")
