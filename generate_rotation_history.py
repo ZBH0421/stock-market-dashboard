@@ -213,9 +213,8 @@ def compute_snapshots(step: int = 5) -> list[dict]:
     if len(dates) < 66:
         return []
 
-    index_key = "week_index" if step == 5 else "day_index"
     snapshots = []
-    point_index = 0
+    week_index = 0
     for t_idx in range(65, len(dates), step):
         date_t = dates[t_idx]
         date_4w = dates[t_idx - 20]
@@ -286,10 +285,10 @@ def compute_snapshots(step: int = 5) -> list[dict]:
 
         snapshots.append({
             "date": date_t.strftime("%Y-%m-%d"),
-            index_key: point_index,
+            "week_index": week_index,
             "sectors": sectors_out,
         })
-        point_index += 1
+        week_index += 1
 
     return snapshots
 
@@ -337,7 +336,10 @@ def generate(force: bool = False, interval: str = "weekly") -> None:
 
 if __name__ == "__main__":
     force = "--force" in sys.argv
-    interval = "daily" if "--interval" in sys.argv and sys.argv[sys.argv.index("--interval") + 1] == "daily" else "weekly"
+    idx = sys.argv.index("--interval") if "--interval" in sys.argv else -1
+    interval = sys.argv[idx + 1] if 0 <= idx < len(sys.argv) - 1 else "weekly"
+    if interval not in ("daily", "weekly"):
+        sys.exit(f"Unknown --interval value: {interval!r}. Use 'weekly' or 'daily'.")
     print(f"Generating rotation history (force={force}, interval={interval})...")
     t0 = time.time()
     generate(force=force, interval=interval)
