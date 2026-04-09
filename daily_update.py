@@ -60,6 +60,19 @@ class DailyUpdater:
         else:
             print("  Sector RRG cache updated.")
 
+    def _regenerate_sector_rrg_daily(self):
+        """Force-regenerate today's daily sector rotation history cache from latest DB data."""
+        script = Path(__file__).parent / "generate_rotation_history.py"
+        print("\n--- Regenerating daily sector RRG cache ---")
+        result = subprocess.run(
+            [sys.executable, str(script), "--force", "--interval", "daily"],
+            check=False,
+        )
+        if result.returncode != 0:
+            print(f"  WARNING: daily sector RRG regeneration failed (exit {result.returncode})")
+        else:
+            print("  Daily sector RRG cache updated.")
+
     def _warmup_industry_cache(self):
         """Pre-generate industry rotation history for all 11 sectors."""
         script = Path(__file__).parent / "generate_industry_rotation_history.py"
@@ -191,6 +204,7 @@ class DailyUpdater:
         print(f"Delisted:  {delisted_count} (Removed from DB)")
         print(f"Errors:    {error_count}")
         self._regenerate_sector_rrg()
+        self._regenerate_sector_rrg_daily()
         self._warmup_industry_cache()
         self._refresh_shiller_cape()
 
