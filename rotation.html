@@ -215,6 +215,11 @@
                 </div>
             </div>
 
+            <div class="benchmark-toggle" id="intervalToggle">
+                <button class="benchmark-btn active" data-interval="weekly">週</button>
+                <button class="benchmark-btn" data-interval="daily">日</button>
+            </div>
+
             <div class="benchmark-toggle" id="benchmarkToggle" style="display:none;">
                 <button class="benchmark-btn active" data-bm="market">vs 全市場</button>
                 <button class="benchmark-btn" data-bm="sector">vs Sector</button>
@@ -353,6 +358,7 @@
     };
 
     let allSnapshots = [];
+    let currentInterval = 'weekly';
     let playSnapshots = [];
     let currentIdx = 0;
     let playTimer = null;
@@ -644,7 +650,9 @@
         const pct = playSnapshots.length > 1 ? (currentIdx / (playSnapshots.length - 1)) * 100 : 100;
         document.getElementById('timelineFill').style.width = pct + '%';
         document.getElementById('timelineThumb').style.left = pct + '%';
-        document.getElementById('timelineDate').textContent = snap.date + ` (week ${snap.week_index + 1}/${allSnapshots.length})`;
+        const unitWord = currentInterval === 'daily' ? 'day' : 'week';
+        document.getElementById('timelineDate').textContent =
+            snap.date + ` (${unitWord} ${(snap.week_index ?? 0) + 1}/${allSnapshots.length})`;
         document.getElementById('asOf').textContent = `— as of ${snap.date}`;
         document.getElementById('tableDate').textContent = snap.date;
 
@@ -690,9 +698,11 @@
     function setTimeRange(weeks) {
         const wasPlaying = !!playTimer;
         stopPlay();
-        playSnapshots = (weeks === 0 || weeks >= allSnapshots.length)
+        // In daily mode, range buttons represent trading days (1Y=260, 6M=130, 3M=65)
+        const count = currentInterval === 'daily' && weeks > 0 ? weeks * 5 : weeks;
+        playSnapshots = (count === 0 || count >= allSnapshots.length)
             ? allSnapshots
-            : allSnapshots.slice(-weeks);
+            : allSnapshots.slice(-count);
         currentIdx = playSnapshots.length - 1;
         renderFrame(currentIdx);
         if (wasPlaying) startPlay();
@@ -889,9 +899,13 @@
         document.getElementById('etfChartCard').style.display = '';
 
         // Reload sector snapshots — cache hit so instant
-        fetch('/api/sector-rotation-history').then(r => r.json()).then(data => {
+        const histUrl = currentInterval === 'daily'
+            ? '/api/sector-rotation-history?interval=daily'
+            : '/api/sector-rotation-history';
+        fetch(histUrl).then(r => r.json()).then(data => {
             allSnapshots = smoothSnapshots(data.snapshots || []);
-            playSnapshots = allSnapshots.length > 52 ? allSnapshots.slice(-52) : allSnapshots;
+            const defaultCount = currentInterval === 'daily' ? 260 : 52;
+            playSnapshots = allSnapshots.length > defaultCount ? allSnapshots.slice(-defaultCount) : allSnapshots;
             currentIdx = playSnapshots.length - 1;
 
             if (chart) { chart.destroy(); chart = null; chartGlobals = null; }
@@ -984,12 +998,42 @@
             drawTrails();
             renderFrame(currentIdx);
         });
+
+        // Interval toggle (週 / 日)
+        document.querySelectorAll('#intervalToggle .benchmark-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const newInterval = btn.dataset.interval;
+                if (newInterval === currentInterval) return;
+                currentInterval = newInterval;
+                document.querySelectorAll('#intervalToggle .benchmark-btn')
+                    .forEach(b => b.classList.toggle('active', b.dataset.interval === newInterval));
+                stopPlay();
+                try {
+                    const data = await pollUntilReady(currentInterval);
+                    allSnapshots = smoothSnapshots(data.snapshots || []);
+                    const defaultCount = currentInterval === 'daily' ? 260 : 52;
+                    playSnapshots = allSnapshots.length > defaultCount
+                        ? allSnapshots.slice(-defaultCount)
+                        : allSnapshots;
+                    currentIdx = playSnapshots.length - 1;
+                    // Re-apply active range button
+                    const activeRangeBtn = document.querySelector('.range-btn.active[data-weeks]');
+                    if (activeRangeBtn) setTimeRange(parseInt(activeRangeBtn.dataset.weeks));
+                    else renderFrame(currentIdx);
+                } catch (e) {
+                    console.error('Interval switch failed:', e);
+                }
+            });
+        });
     }
 
-    async function pollUntilReady() {
+    async function pollUntilReady(interval) {
+        const url = interval === 'daily'
+            ? '/api/sector-rotation-history?interval=daily'
+            : '/api/sector-rotation-history';
         for (let attempt = 0; attempt < 20; attempt++) {
             await new Promise(r => setTimeout(r, attempt === 0 ? 0 : 10000));
-            const res = await fetch('/api/sector-rotation-history');
+            const res = await fetch(url);
             if (res.status === 200) return res.json();
             if (res.status !== 202) throw new Error('API error ' + res.status);
             document.getElementById('loadingMsg').textContent =
@@ -1025,7 +1069,7 @@
 
     async function load() {
         try {
-            const data = await pollUntilReady();
+            const data = await pollUntilReady(currentInterval);
             allSnapshots = smoothSnapshots(data.snapshots || []);
             if (allSnapshots.length === 0) throw new Error('No snapshot data returned');
 
